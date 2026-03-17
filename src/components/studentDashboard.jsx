@@ -17,7 +17,7 @@ export default function StudentDashboard() {
   const [studentProfile, setStudentProfile] = useState(null);
   const [history, setHistory] = useState([]);
 
-  
+
   // --- FETCH DATA LOGIC ---
   const fetchHistory = async () => {
     try {
@@ -95,7 +95,7 @@ export default function StudentDashboard() {
       }
 
       const user = await account.get();
-      
+
       await databases.createDocument(
         Config.dbId,
         Config.submissionsCol,
@@ -137,13 +137,13 @@ export default function StudentDashboard() {
       });
     } finally {
       setLoading(false);
-    }
+    } cd
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
+    <div className="min-h-screen bg-gray-50 font-sans pt-4">
       <Header />
-      
+
       <div className="bg-teal-800 px-6 py-10 text-white shadow-xl">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -151,23 +151,23 @@ export default function StudentDashboard() {
             <p className="text-teal-100/80 mt-1">Manage your academic submissions and payments.</p>
           </div>
           <div className="flex gap-4">
-             <button className="text-amber-400 font-bold hover:text-amber-300 transition-colors underline underline-offset-4 text-sm">
-                Need Help?
-             </button>
+            <button className="text-amber-400 font-bold hover:text-amber-300 transition-colors underline underline-offset-4 text-sm">
+              Need Help?
+            </button>
           </div>
         </div>
       </div>
 
       <main className="max-w-7xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          
+
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:border-teal-100 transition-all group">
             <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
               <Upload size={28} />
             </div>
             <h5 className="text-xl font-bold text-gray-800 mb-3">Manual Payment</h5>
             <p className="text-gray-500 text-sm leading-relaxed mb-6">Upload your bank transfer receipt for verification by the class rep.</p>
-            <button 
+            <button
               className="w-full bg-teal-700 text-white py-3.5 rounded-xl font-bold hover:bg-teal-800 transition-all active:scale-95"
               onClick={() => setOpenUpload(true)}
             >
@@ -181,7 +181,7 @@ export default function StudentDashboard() {
             </div>
             <h5 className="text-xl font-bold text-gray-800 mb-3">Submit Assignment</h5>
             <p className="text-gray-500 text-sm leading-relaxed mb-6">Log your assignment submission details to ensure your records are up to date.</p>
-            <button 
+            <button
               className="w-full bg-teal-700 text-white py-3.5 rounded-xl font-bold hover:bg-teal-800 transition-all active:scale-95"
               onClick={() => setOpenAss(true)}
             >
@@ -195,7 +195,7 @@ export default function StudentDashboard() {
             </div>
             <h5 className="text-xl font-bold text-gray-800 mb-3">Submission History</h5>
             <p className="text-gray-500 text-sm leading-relaxed mb-6">Track all your past receipts and assignment logs in one central place.</p>
-            <button 
+            <button
               onClick={() => setOpenHistory(true)}
               className="w-full border-2 border-teal-700 text-teal-700 py-3 rounded-xl font-bold hover:bg-teal-50 transition-colors"
             >
@@ -218,14 +218,14 @@ export default function StudentDashboard() {
               </button>
             </div>
 
-            <form 
-              onSubmit={handleSubmit((data) => handleSubmission(data, openUpload ? "receipt" : "assignment"))} 
+            <form
+              onSubmit={handleSubmit((data) => handleSubmission(data, openUpload ? "receipt" : "assignment"))}
               className="p-8 space-y-5"
             >
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-gray-400 mb-2 ml-1">Select Course</label>
-                <select 
-                  {...register("course", { required: true })} 
+                <select
+                  {...register("course", { required: true })}
                   className="w-full p-3.5 border border-gray-100 rounded-2xl focus:border-teal-500 outline-none bg-gray-50 transition-all font-medium"
                 >
                   <option value="">-- Choose a course --</option>
@@ -253,7 +253,7 @@ export default function StudentDashboard() {
                 </div>
               )}
 
-              <button 
+              <button
                 disabled={loading}
                 className="w-full bg-amber-500 text-white py-4 rounded-2xl font-black hover:bg-amber-600 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
               >

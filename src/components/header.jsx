@@ -24,16 +24,15 @@ export default function Header() {
   };
 
   return (
-    <header 
-      className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 flex items-center h-14 ${
-        scrolled 
-          ? "bg-teal-700/95 backdrop-blur-md shadow-md" 
-          : "bg-teal-700"
-      }`}
+    <header
+      className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 flex items-center h-14 ${scrolled
+        ? "bg-teal-700/95 backdrop-blur-md shadow-md"
+        : "bg-teal-700"
+        }`}
     >
       <nav className="flex items-center justify-between px-4 md:px-6 max-w-7xl mx-auto w-full">
-        <Link 
-          to="/" 
+        <Link
+          to="/"
           className="flex items-center gap-2 group transition-transform active:scale-95 no-underline"
           style={{ textDecoration: 'none' }}
         >
@@ -45,11 +44,11 @@ export default function Header() {
           </span>
         </Link>
 
-        <button 
+        <button
           onClick={handleLogout}
           className="flex items-center gap-2 bg-white/10 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-white/20 transition-all active:scale-95 shadow-sm"
         >
-          <LogOut size={14} /> 
+          <LogOut size={14} />
           <span>Logout</span>
         </button>
       </nav>
