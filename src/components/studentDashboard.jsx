@@ -85,7 +85,8 @@ export default function StudentDashboard() {
     try {
       let uploadedFileId = null;
 
-      if (type === "receipt" && data.file?.[0]) {
+      // Upload file for both receipt and assignment
+      if (data.file?.[0]) {
         const fileUpload = await storage.createFile(
           Config.bucketId,
           ID.unique(),
@@ -137,7 +138,7 @@ export default function StudentDashboard() {
       });
     } finally {
       setLoading(false);
-    } cd
+    }
   };
 
   return (
@@ -194,10 +195,10 @@ export default function StudentDashboard() {
               <History size={28} />
             </div>
             <h5 className="text-xl font-bold text-gray-800 mb-3">Submission History</h5>
-            <p className="text-gray-500 text-sm leading-relaxed mb-6">Track all your past receipts and assignment logs in one central place.</p>
+            <p className="text-gray-500 text-sm leading-relaxed mb-6">View all your past submissions and payment records in one place.</p>
             <button
+              className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 transition-all active:scale-95"
               onClick={() => setOpenHistory(true)}
-              className="w-full border-2 border-teal-700 text-teal-700 py-3 rounded-xl font-bold hover:bg-teal-50 transition-colors"
             >
               View History
             </button>
@@ -249,7 +250,14 @@ export default function StudentDashboard() {
               {openUpload && (
                 <div className="bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-gray-200">
                   <label className="block text-[10px] uppercase tracking-widest font-black text-gray-400 mb-2">Receipt Image/PDF</label>
-                  <input type="file" {...register("file", { required: true })} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-teal-700 file:text-white" />
+                  <input type="file" accept="image/*,.pdf" {...register("file", { required: true })} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-amber-600 file:text-white" />
+                </div>
+              )}
+
+              {openAss && (
+                <div className="bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-gray-200">
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-gray-400 mb-2">Assignment Document/Image</label>
+                  <input type="file" accept="image/*,.pdf,.doc,.docx" {...register("file", { required: true })} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-teal-700 file:text-white" />
                 </div>
               )}
 
@@ -277,16 +285,18 @@ export default function StudentDashboard() {
                 <div className="text-center py-10 text-slate-400">No submissions found.</div>
               ) : (
                 history.map((item) => (
-                  <div key={item.$id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex justify-between items-center">
-                    <div>
-                      <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-md ${item.type === 'receipt' ? 'bg-amber-100 text-amber-700' : 'bg-teal-100 text-teal-700'}`}>
-                        {item.type}
-                      </span>
-                      <h4 className="font-bold text-slate-800 mt-2">{item.code}</h4>
-                      <p className="text-xs text-slate-500">{new Date(item.$createdAt).toLocaleDateString()}</p>
+                  <div key={item.$id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex justify-between items-center hover:bg-slate-100 transition-colors">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-md ${item.type === 'receipt' ? 'bg-amber-100 text-amber-700' : 'bg-teal-100 text-teal-700'}`}>
+                          {item.type === 'receipt' ? 'Receipt' : 'Assignment'}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-slate-800">{item.code}</h4>
+                      <p className="text-xs text-slate-500">{new Date(item.$createdAt).toLocaleDateString()} | {item.name}</p>
                     </div>
                     {item.fileId && (
-                      <a href={storage.getFileView(Config.bucketId, item.fileId)} target="_blank" rel="noreferrer" className="p-3 bg-white text-blue-600 rounded-xl shadow-sm border border-slate-100">
+                      <a href={storage.getFileDownload(Config.bucketId, item.fileId)} className="ml-4 p-3 bg-white hover:bg-blue-50 text-blue-600 rounded-xl shadow-sm border border-slate-200 transition-all" download>
                         <Upload size={18} />
                       </a>
                     )}
