@@ -14,6 +14,7 @@ export default function Admins({ user }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [students, setStudents] = useState([]);
   const [receipts, setReceipts] = useState([]); // Store receipts
+  const [assignments, setAssignments] = useState([]); // Store assignments
   const [loading, setLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null); // For Image Popup
 
@@ -39,19 +40,33 @@ export default function Admins({ user }) {
   // 1. Updated Toggle: Moves student from Pending -> Verified
   const handleStatusToggle = async (rcpt) => {
     try {
-      // Update Appwrite
+      // Get the highest serial number for verified students in this department/level
+      const verifiedRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
+        Query.equal("status", "verified"),
+        Query.equal("department", user.department),
+        Query.equal("level", user.level),
+        Query.orderDesc("serialNumber"),
+        Query.limit(1)
+      ]);
+
+      const nextSerialNumber = verifiedRes.documents.length > 0 ? (verifiedRes.documents[0].serialNumber || 0) + 1 : 1;
+
+      // Update Appwrite with verification and serial number
       await databases.updateDocument(
         Config.dbId,
         Config.submissionsCol,
         rcpt.$id,
-        { status: "verified" }
+        {
+          status: "verified",
+          serialNumber: nextSerialNumber
+        }
       );
 
       // Remove from 'receipts' (the pending UI)
       setReceipts(prev => prev.filter(item => item.$id !== rcpt.$id));
 
-      // Add to 'selectedStudents' (the verified UI)
-      setSelectedStudents(prev => [...prev, { ...rcpt, status: "verified" }]);
+      // Add to 'selectedStudents' (the verified UI) with serial number
+      setSelectedStudents(prev => [...prev, { ...rcpt, status: "verified", serialNumber: nextSerialNumber }]);
 
     } catch (error) {
       console.error("Verification failed:", error);
@@ -121,8 +136,8 @@ export default function Admins({ user }) {
       doc.text(`DATE GENERATED: ${new Date().toLocaleDateString()}`, 14, 57);
 
       // --- 4. DATA TABLE ---
-      const tableData = selectedStudents.map((s, i) => [
-        i + 1,
+      const tableData = selectedStudents.map((s) => [
+        s.serialNumber,
         s.name.toUpperCase(),
         s.matric,
         s.code || "GST101",
@@ -301,6 +316,16 @@ export default function Admins({ user }) {
           ]);
           setSelectedStudents(verifiedRes.documents);
         }
+
+        if (activeContent === "submission") {
+          const assignmentRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
+            Query.equal("type", "assignment"),
+            Query.equal("department", user.department),
+            Query.equal("level", user.level),
+            Query.orderDesc("$createdAt")
+          ]);
+          setAssignments(assignmentRes.documents);
+        }
       } catch (error) {
         console.error("Fetch error:", error);
       } finally {
@@ -463,6 +488,7 @@ export default function Admins({ user }) {
                       <thead className="text-[10px] uppercase text-teal-400/50 border-b border-teal-800">
                         <tr>
                           <th className="pb-4">Select</th>
+                          <th className="pb-4">S/N</th>
                           <th className="pb-4">Name</th>
                           <th className="pb-4">Matric</th>
                           <th className="pb-4">Course Code</th>
@@ -480,6 +506,7 @@ export default function Admins({ user }) {
                                 className="w-4 h-4 accent-teal-400 rounded cursor-pointer"
                               />
                             </td>
+                            <td className="py-4 font-mono text-xs text-teal-400/70">{s.serialNumber}</td>
                             <td className="py-4 font-bold uppercase group-hover:text-teal-300 transition-colors">{s.name}</td>
                             <td className="py-4 font-mono text-xs text-teal-400/70">{s.matric}</td>
                             <td className="py-4 font-mono text-xs text-teal-400/70">{s.code || "GST101"}</td>
@@ -495,6 +522,63 @@ export default function Admins({ user }) {
               )}
             </div>
           )}
+
+          {/* ASSIGNMENTS SECTION */}
+          {activeContent === "submission" && (
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 bg-blue-50/50 border-b border-blue-100 flex justify-between items-center">
+                <h3 className="text-blue-700 font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                  <BarChart size={14} /> Assignments Submitted ({assignments.length})
+                </h3>
+              </div>
+
+              {loading ? (
+                <div className="flex flex-col items-center justify-center p-20 text-gray-400">
+                  <Loader2 className="animate-spin mb-2" size={32} />
+                  <p>Fetching assignments...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold border-b">
+                      <tr>
+                        <th className="px-6 py-4">Student Name</th>
+                        <th className="px-6 py-4">Matric</th>
+                        <th className="px-6 py-4">Course Code</th>
+                        <th className="px-6 py-4">Submission Date</th>
+                        <th className="px-6 py-4 text-right">View</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {assignments.length > 0 ? assignments.map((assignment) => (
+                        <tr key={assignment.$id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-gray-800">{assignment.name}</td>
+                          <td className="px-6 py-4 text-gray-600 font-mono text-xs">{assignment.matric}</td>
+                          <td className="px-6 py-4 text-gray-600">{assignment.code || "N/A"}</td>
+                          <td className="px-6 py-4 text-gray-500 text-xs">{new Date(assignment.$createdAt).toLocaleDateString()}</td>
+                          <td className="px-6 py-4 text-right">
+                            {assignment.fileId && (
+                              <button
+                                onClick={() => setSelectedImage(storage.getFileView(Config.bucketId, assignment.fileId))}
+                                className="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all"
+                              >
+                                <Eye size={18} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-10 text-center text-gray-400 text-sm italic">No assignments submitted yet.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* PROFILE SECTION */}
           {activeContent === "profile" && (
             <div className="max-w-4xl mx-auto space-y-6">

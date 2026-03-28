@@ -16,6 +16,7 @@ export default function StudentDashboard() {
   const [courses, setCourses] = useState([]);
   const [studentProfile, setStudentProfile] = useState(null);
   const [history, setHistory] = useState([]);
+  const [serialNumber, setSerialNumber] = useState(null);
 
 
   // --- FETCH DATA LOGIC ---
@@ -31,6 +32,25 @@ export default function StudentDashboard() {
         ]
       );
       setHistory(response.documents);
+
+      // Fetch latest verified receipt for serial number
+      const verifiedRes = await databases.listDocuments(
+        Config.dbId,
+        Config.submissionsCol,
+        [
+          Query.equal("userId", user.$id),
+          Query.equal("status", "verified"),
+          Query.equal("type", "receipt"),
+          Query.orderDesc("serialNumber"),
+          Query.limit(1)
+        ]
+      );
+      if (verifiedRes.documents.length > 0) {
+        const serial = verifiedRes.documents[0].serialNumber;
+        setSerialNumber(serial || "Pending assignment");
+      } else {
+        setSerialNumber(null);
+      }
     } catch (error) {
       console.error("History fetch error:", error);
     }
@@ -111,7 +131,9 @@ export default function StudentDashboard() {
           faculty: studentProfile?.faculty || "N/A",
           school: studentProfile?.school || "N/A",
           department: studentProfile?.department || "N/A",
-          level: studentProfile?.level || "N/A"
+          level: studentProfile?.level || "N/A",
+          serialNumber: null,
+          status: "pending"
         }
       );
 
@@ -160,6 +182,21 @@ export default function StudentDashboard() {
       </div>
 
       <main className="max-w-7xl mx-auto px-6 py-12">
+        {serialNumber && (
+          <div className="bg-gradient-to-r from-green-500 to-teal-600 text-white p-6 rounded-3xl shadow-xl mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-black">🎉 Payment Verified!</h2>
+                <p className="text-green-100 mt-1">Your receipt has been approved by the admin.</p>
+              </div>
+              <div className="text-right">
+                <div className="text-4xl font-black">{serialNumber}</div>
+                <div className="text-sm text-green-200">Serial Number</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:border-teal-100 transition-all group">

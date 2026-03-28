@@ -28,7 +28,7 @@ export default function SuperAdmins() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  
+
   const [allCourses, setAllcourses] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -58,19 +58,19 @@ export default function SuperAdmins() {
   };
 
   // Fetch Admin's own profile on mount
- useEffect(() => {
+  useEffect(() => {
     const getAdminData = async () => {
       try {
-        const user = await account.get(); 
+        const user = await account.get();
         const res = await databases.listDocuments(Config.dbId, Config.profilesCol, [
           // Change 'userId' to whatever your actual attribute name is (e.g., 'email')
-          Query.equal('email', user.email) 
+          Query.equal('email', user.email)
         ]);
         if (res.documents.length > 0) {
           setAdminProfile(res.documents[0]);
         }
-      } catch (e) { 
-        console.error("Profile fetch error", e); 
+      } catch (e) {
+        console.error("Profile fetch error", e);
       } finally {
         setLoading(false);
       }
@@ -79,76 +79,76 @@ export default function SuperAdmins() {
   }, []);
 
 
-const onSubmitCourse = async (data) => {
-  if (!adminProfile) {
-    showToast("Admin profile not loaded yet.", "error");
-    return;
-  }
+  const onSubmitCourse = async (data) => {
+    if (!adminProfile) {
+      showToast("Admin profile not loaded yet.", "error");
+      return;
+    }
 
-  const payload = {
-    coursecode: data.code,
-    coursetitle: data.title,
-    courseunit: parseInt(data.unit),
-    faculty: adminProfile.faculty,
-    school: adminProfile.school,
-    department: adminProfile.department,
-    level: adminProfile.level
+    const payload = {
+      coursecode: data.code,
+      coursetitle: data.title,
+      courseunit: parseInt(data.unit),
+      faculty: adminProfile.faculty,
+      school: adminProfile.school,
+      department: adminProfile.department,
+      level: adminProfile.level
+    };
+
+    try {
+      if (editingId) {
+        // UPDATE existing course
+        await databases.updateDocument(Config.dbId, Config.coursesCol, editingId, payload);
+        showToast("Course updated successfully!", 'success');
+      } else {
+        // CREATE new course
+        await databases.createDocument(Config.dbId, Config.coursesCol, ID.unique(), payload);
+        showToast("Course created successfully!", 'success');
+      }
+
+      // Reset Form and State
+      setEditingId(null);
+      reset({ code: '', title: '', unit: '' });
+      setActiveContent("viewCourses");
+      fetchCourses();
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
   };
 
-  try {
-    if (editingId) {
-      // UPDATE existing course
-      await databases.updateDocument(Config.dbId, Config.coursesCol, editingId, payload);
-      showToast("Course updated successfully!", 'success');
-    } else {
-      // CREATE new course
-      await databases.createDocument(Config.dbId, Config.coursesCol, ID.unique(), payload);
-      showToast("Course created successfully!", 'success');
-    }
 
-    // Reset Form and State
-    setEditingId(null);
-    reset({ code: '', title: '', unit: '' });
-    setActiveContent("viewCourses");
-    fetchCourses();
-  } catch (e) {
-    showToast(e.message, 'error');
-  }
-};
-
-
-const handleDeleteCourse = async (id) => {
-  Swal.fire({
-    title: "Are you sure?",
-    text: "This course will be permanently removed.",
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonColor: "#0f766e", // Teal 700
-    cancelButtonColor: "#e11d48",  // Rose 600
-    confirmButtonText: "Yes, delete it!",
-    background: "#ffffff",
-    customClass: {
-      popup: 'rounded-[2rem]',
-      confirmButton: 'rounded-xl font-bold px-6 py-3',
-      cancelButton: 'rounded-xl font-bold px-6 py-3'
-    }
-  }).then(async (result) => {
-    if (result.isConfirmed) {
-      try {
-        await databases.deleteDocument(Config.dbId, Config.coursesCol, id);
-        Swal.fire({
-          title: "Deleted!",
-          icon: "success",
-          timer: 1500,
-          showConfirmButton: false
-        });
-        fetchCourses();
-      } catch (e) {
-        showToast(e.message, 'error');
+  const handleDeleteCourse = async (id) => {
+    Swal.fire({
+      title: "Are you sure?",
+      text: "This course will be permanently removed.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#0f766e", // Teal 700
+      cancelButtonColor: "#e11d48",  // Rose 600
+      confirmButtonText: "Yes, delete it!",
+      background: "#ffffff",
+      customClass: {
+        popup: 'rounded-[2rem]',
+        confirmButton: 'rounded-xl font-bold px-6 py-3',
+        cancelButton: 'rounded-xl font-bold px-6 py-3'
       }
-    }
-  });
-};
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          await databases.deleteDocument(Config.dbId, Config.coursesCol, id);
+          Swal.fire({
+            title: "Deleted!",
+            icon: "success",
+            timer: 1500,
+            showConfirmButton: false
+          });
+          fetchCourses();
+        } catch (e) {
+          showToast(e.message, 'error');
+        }
+      }
+    });
+  };
 
   const toggleUserRole = async (userId, currentRole) => {
     const newRole = currentRole === 'admin' ? 'student' : 'admin';
@@ -165,12 +165,12 @@ const handleDeleteCourse = async (id) => {
   }, [activeContent]);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] pt-14">
       <Header />
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
       <div className="flex max-w-[1600px] mx-auto min-h-[calc(100vh-80px)]">
-        
+
         {/* Sidebar */}
         <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/80 backdrop-blur-xl border-r border-slate-200 transform transition-all duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
           <div className="p-6 h-full flex flex-col">
@@ -178,7 +178,7 @@ const handleDeleteCourse = async (id) => {
               <div className="bg-teal-700 p-2 rounded-xl shadow-lg"><Settings className="text-white" size={24} /></div>
               <h2 className="text-xl font-black text-slate-800">SuperHub</h2>
             </div>
-            
+
             <nav className="space-y-1.5 flex-1">
               {[
                 { key: "viewCourses", label: "Directory", icon: BookOpen },
@@ -206,12 +206,12 @@ const handleDeleteCourse = async (id) => {
               <h1 className="text-3xl font-black text-slate-900 tracking-tight capitalize">{activeContent.replace(/([A-Z])/g, ' $1')}</h1>
               <p className="text-slate-500 font-medium">System Management</p>
             </div>
-            
+
             {(activeContent === "viewCourses" || activeContent === "manageUsers") && (
               <div className="relative w-full md:w-72">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Filter results..."
                   className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 ring-teal-500/20"
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -230,20 +230,20 @@ const handleDeleteCourse = async (id) => {
                     <h3 className="text-2xl font-black text-slate-800 mt-2">{c.coursecode}</h3>
                     <p className="text-slate-500 font-bold text-sm mb-6">{c.coursetitle}</p>
                     <div className="flex justify-end gap-2 border-t pt-4">
-                       <button 
-                            onClick={() => {
-                              setEditingId(c.$id); // Key step: Store the ID
-                              setActiveContent("createCourse"); 
-                              reset({
-                                code: c.coursecode,
-                                title: c.coursetitle,
-                                unit: c.courseunit
-                              });
-                            }} 
-                            className="p-2 text-slate-400 hover:text-teal-600 transition-colors"
-                          >
-                            <Edit size={18} />
-                          </button>
+                      <button
+                        onClick={() => {
+                          setEditingId(c.$id); // Key step: Store the ID
+                          setActiveContent("createCourse");
+                          reset({
+                            code: c.coursecode,
+                            title: c.coursetitle,
+                            unit: c.courseunit
+                          });
+                        }}
+                        className="p-2 text-slate-400 hover:text-teal-600 transition-colors"
+                      >
+                        <Edit size={18} />
+                      </button>
                       <button onClick={() => handleDeleteCourse(c.$id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={18} /></button>
                     </div>
                   </div>
@@ -253,88 +253,88 @@ const handleDeleteCourse = async (id) => {
           )}
 
           {/* 2. Create Course (CLEANED & RESPONSIVE) */}
-        {activeContent === "createCourse" && (
-          <div className="max-w-3xl mx-auto bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-xl animate-in fade-in zoom-in-95 duration-300">
-            
-            {/* Header with Dynamic Title and Cancel option */}
-            <div className="mb-8 border-b border-slate-50 pb-6 flex justify-between items-start">
-              <div>
-                <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">
-                  {editingId ? "Modify Course" : "Create New Course"}
-                </h2>
-                <p className="text-slate-500 text-xs md:text-sm font-medium mt-1">
-                  Target: <span className="text-teal-600 font-bold uppercase">{adminProfile?.department} ({adminProfile?.level}L)</span>
-                </p>
+          {activeContent === "createCourse" && (
+            <div className="max-w-3xl mx-auto bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-xl animate-in fade-in zoom-in-95 duration-300">
+
+              {/* Header with Dynamic Title and Cancel option */}
+              <div className="mb-8 border-b border-slate-50 pb-6 flex justify-between items-start">
+                <div>
+                  <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">
+                    {editingId ? "Modify Course" : "Create New Course"}
+                  </h2>
+                  <p className="text-slate-500 text-xs md:text-sm font-medium mt-1">
+                    Target: <span className="text-teal-600 font-bold uppercase">{adminProfile?.department} ({adminProfile?.level}L)</span>
+                  </p>
+                </div>
+
+                {editingId && (
+                  <button
+                    onClick={() => { setEditingId(null); reset(); setActiveContent("viewCourses"); }}
+                    className="text-[10px] font-black uppercase tracking-widest text-rose-500 bg-rose-50 px-3 py-2 rounded-lg hover:bg-rose-100 transition-all"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
               </div>
-              
-              {editingId && (
-                <button 
-                  onClick={() => { setEditingId(null); reset(); setActiveContent("viewCourses"); }}
-                  className="text-[10px] font-black uppercase tracking-widest text-rose-500 bg-rose-50 px-3 py-2 rounded-lg hover:bg-rose-100 transition-all"
+
+              <form onSubmit={handleSubmit(onSubmitCourse)} className="space-y-6">
+                {/* Responsive Grid: Stacks on mobile, side-by-side on md screens */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                  <div className="w-full">
+                    <label className="text-[10px] md:text-xs font-black text-slate-400 uppercase ml-1 tracking-wider">Course Code</label>
+                    <input
+                      {...register("code")}
+                      required
+                      className="w-full mt-2 p-3 md:p-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 rounded-xl md:rounded-2xl outline-none transition-all font-bold text-slate-700"
+                      placeholder="e.g. CSC 201"
+                    />
+                  </div>
+                  <div className="w-full">
+                    <label className="text-[10px] md:text-xs font-black text-slate-400 uppercase ml-1 tracking-wider">Credit Units</label>
+                    <input
+                      {...register("unit")}
+                      required
+                      type="number"
+                      className="w-full mt-2 p-3 md:p-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 rounded-xl md:rounded-2xl outline-none transition-all font-bold text-slate-700"
+                      placeholder="e.g. 3"
+                    />
+                  </div>
+                </div>
+
+                <div className="w-full">
+                  <label className="text-[10px] md:text-xs font-black text-slate-400 uppercase ml-1 tracking-wider">Full Course Title</label>
+                  <input
+                    {...register("title")}
+                    required
+                    className="w-full mt-2 p-3 md:p-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 rounded-xl md:rounded-2xl outline-none transition-all font-bold text-slate-700"
+                    placeholder="e.g. Introduction to Software Engineering"
+                  />
+                </div>
+
+                {/* Logic to show which Admin is creating the course */}
+                <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-4 border border-slate-100">
+                  <div className="bg-white p-2 rounded-lg shadow-sm">
+                    <ShieldCheck className="text-teal-600" size={20} />
+                  </div>
+                  <div className="text-[10px] md:text-xs">
+                    <p className="text-slate-400 uppercase font-black">Authorized Publisher</p>
+                    <p className="text-slate-700 font-bold">{adminProfile?.full_name || "Super Admin"}</p>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!adminProfile}
+                  className="w-full bg-slate-900 text-white py-4 md:py-5 rounded-xl md:rounded-2xl font-black hover:bg-teal-700 transition-all shadow-lg hover:shadow-teal-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                 >
-                  Cancel Edit
+                  {editingId ? <Edit size={20} /> : <Plus size={20} />}
+                  {adminProfile
+                    ? (editingId ? "Save Changes" : "Create & Publish Course")
+                    : "Fetching Credentials..."}
                 </button>
-              )}
+              </form>
             </div>
-
-            <form onSubmit={handleSubmit(onSubmitCourse)} className="space-y-6">
-              {/* Responsive Grid: Stacks on mobile, side-by-side on md screens */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div className="w-full">
-                  <label className="text-[10px] md:text-xs font-black text-slate-400 uppercase ml-1 tracking-wider">Course Code</label>
-                  <input 
-                    {...register("code")} 
-                    required 
-                    className="w-full mt-2 p-3 md:p-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 rounded-xl md:rounded-2xl outline-none transition-all font-bold text-slate-700" 
-                    placeholder="e.g. CSC 201" 
-                  />
-                </div>
-                <div className="w-full">
-                  <label className="text-[10px] md:text-xs font-black text-slate-400 uppercase ml-1 tracking-wider">Credit Units</label>
-                  <input 
-                    {...register("unit")} 
-                    required 
-                    type="number" 
-                    className="w-full mt-2 p-3 md:p-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 rounded-xl md:rounded-2xl outline-none transition-all font-bold text-slate-700" 
-                    placeholder="e.g. 3" 
-                  />
-                </div>
-              </div>
-
-              <div className="w-full">
-                <label className="text-[10px] md:text-xs font-black text-slate-400 uppercase ml-1 tracking-wider">Full Course Title</label>
-                <input 
-                  {...register("title")} 
-                  required 
-                  className="w-full mt-2 p-3 md:p-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 rounded-xl md:rounded-2xl outline-none transition-all font-bold text-slate-700" 
-                  placeholder="e.g. Introduction to Software Engineering" 
-                />
-              </div>
-
-              {/* Logic to show which Admin is creating the course */}
-              <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-4 border border-slate-100">
-                <div className="bg-white p-2 rounded-lg shadow-sm">
-                  <ShieldCheck className="text-teal-600" size={20} />
-                </div>
-                <div className="text-[10px] md:text-xs">
-                  <p className="text-slate-400 uppercase font-black">Authorized Publisher</p>
-                  <p className="text-slate-700 font-bold">{adminProfile?.full_name || "Super Admin"}</p>
-                </div>
-              </div>
-
-              <button 
-                type="submit"
-                disabled={!adminProfile}
-                className="w-full bg-slate-900 text-white py-4 md:py-5 rounded-xl md:rounded-2xl font-black hover:bg-teal-700 transition-all shadow-lg hover:shadow-teal-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-              >
-                {editingId ? <Edit size={20} /> : <Plus size={20} />}
-                {adminProfile 
-                  ? (editingId ? "Save Changes" : "Create & Publish Course") 
-                  : "Fetching Credentials..."}
-              </button>
-            </form>
-          </div>
-        )}
+          )}
 
           {/* 3. Manage Users */}
           {activeContent === "manageUsers" && (
@@ -380,8 +380,8 @@ const handleDeleteCourse = async (id) => {
           {/* 4. Settings Placeholder */}
           {activeContent === "settings" && (
             <div className="p-20 text-center bg-white border border-dashed rounded-[3rem] text-slate-400">
-               <ShieldCheck size={48} className="mx-auto mb-4 opacity-20" />
-               <p className="font-bold tracking-tight">System configuration is restricted to Global SuperAdmins.</p>
+              <ShieldCheck size={48} className="mx-auto mb-4 opacity-20" />
+              <p className="font-bold tracking-tight">System configuration is restricted to Global SuperAdmins.</p>
             </div>
           )}
 
