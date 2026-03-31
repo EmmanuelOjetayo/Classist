@@ -336,6 +336,14 @@ export default function Admins({ user }) {
         bvn: accountDetails.bvn,
       });
       setShowPromotionPopup(false);
+      // Update currentUser with the new account details
+      setCurrentUser({
+        ...currentUser,
+        bankName: accountDetails.bank,
+        accountNumber: accountDetails.accountNumber,
+        accountName: accountDetails.name,
+        bvn: accountDetails.bvn,
+      });
       Swal.fire({
         title: 'Success!',
         text: 'Account details saved successfully!',
@@ -441,7 +449,7 @@ export default function Admins({ user }) {
   }, [activeContent, currentUser]);
 
   useEffect(() => {
-    if (currentUser.role === 'admin' && !currentUser.bankName) {
+    if (currentUser.role === 'admin' && !currentUser.accountNumber) {
       setShowPromotionPopup(true);
     }
   }, [currentUser]);
