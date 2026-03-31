@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { account, databases, ID, Config } from "../backend/appwrite";
-import { 
-  ChevronRight, Loader2, School, GraduationCap, 
-  BookOpen, Phone, Mail, Lock, User, 
-  CheckCircle2, Eye, EyeOff 
+import {
+  ChevronRight, Loader2, School, GraduationCap,
+  BookOpen, Phone, Mail, Lock, User,
+  CheckCircle2, Eye, EyeOff
 } from "lucide-react";
 import Swal from "sweetalert2";
+import logo from "../assets/logo.png";
 
 const UNIVERSITY_DATA = {
   LAUTECH: { faculties: { "Engineering & Tech": ["Computer Science", "Mechanical Engineering"], "Pure & Applied Sciences": ["Biology", "Physics"], "Management Sciences": ["Accounting"] } },
@@ -66,7 +67,7 @@ const SignUp = () => {
         confirmButtonColor: '#0f766e',
         timer: 2000
       });
-      
+
       setTimeout(() => navigate("/login"), 2000);
     } catch (error) {
       Swal.fire({ icon: 'error', title: 'Registration Failed', text: error.message, confirmButtonColor: '#0f766e' });
@@ -80,7 +81,7 @@ const SignUp = () => {
   return (
     <div className="h-screen bg-slate-50 flex items-center justify-center p-2 sm:p-4 overflow-hidden font-sans">
       <div className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row max-h-[95vh] border border-slate-100">
-        
+
         {/* Sidebar */}
         <div className="bg-teal-800 md:w-1/3 p-8 text-white flex flex-col justify-between hidden md:flex">
           <div>
@@ -116,11 +117,16 @@ const SignUp = () => {
 
         {/* Form Content */}
         <div className="p-6 md:p-10 flex-1 overflow-y-auto">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-amber-400 p-1 flex items-center justify-center">
+              <img src={logo} alt="Classist Logo" className="w-full h-full object-contain" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800">Classist Sign Up</h2>
+          </div>
           <header className="mb-8">
-            <h2 className="text-2xl font-bold text-slate-800">Create Account</h2>
             <p className="text-slate-400 text-xs">Enter your details to join your campus network.</p>
           </header>
-          
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Identity Group */}
             <div className="grid grid-cols-3 gap-3">
@@ -143,7 +149,7 @@ const SignUp = () => {
                   {Object.keys(UNIVERSITY_DATA).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </FormField>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField label="Faculty" icon={GraduationCap} error={errors.faculty}>
                   <select {...register("faculty", { required: "Required" })} disabled={!selectedSchool} className={inputClass}>
@@ -180,18 +186,18 @@ const SignUp = () => {
               <FormField label="Phone" icon={Phone} error={errors.phone}>
                 <input {...register("phone", { required: "Required" })} placeholder="080..." className={inputClass} />
               </FormField>
-              
+
               {/* PASSWORD FIELDS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2">
                 <FormField label="Password" icon={Lock} error={errors.password}>
                   <div className="relative">
-                    <input 
-                      type={showPassword ? "text" : "password"} 
-                      {...register("password", { required: "Min 8 chars", minLength: 8 })} 
-                      className={inputClass} 
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      {...register("password", { required: "Min 8 chars", minLength: 8 })}
+                      className={inputClass}
                       placeholder="••••••••"
                     />
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-600 transition-colors"
@@ -203,16 +209,16 @@ const SignUp = () => {
 
                 <FormField label="Confirm Password" icon={CheckCircle2} error={errors.confirmPassword}>
                   <div className="relative">
-                    <input 
-                      type={showPassword ? "text" : "password"} 
-                      {...register("confirmPassword", { 
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      {...register("confirmPassword", {
                         required: "Please confirm",
                         validate: (val) => val === password || "Passwords do not match"
-                      })} 
-                      className={inputClass} 
+                      })}
+                      className={inputClass}
                       placeholder="••••••••"
                     />
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-600 transition-colors"
