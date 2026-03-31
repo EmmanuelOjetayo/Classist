@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Header from "./header";
-import { databases, storage, Config } from "../backend/appwrite";
+import { databases, storage, Config, account } from "../backend/appwrite";
 import { Query } from "appwrite";
 import {
   Menu, X, Users, BookOpen, BarChart, Loader2,
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable"; // Import the function directly
+import Swal from 'sweetalert2';
 
 export default function Admins({ user }) {
   const [activeContent, setActiveContent] = useState("manageStudents");
@@ -20,6 +21,16 @@ export default function Admins({ user }) {
 
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [selectedForReport, setSelectedForReport] = useState([]);
+
+  const [showPromotionPopup, setShowPromotionPopup] = useState(false);
+  const [accountDetails, setAccountDetails] = useState({
+    name: '',
+    bank: '',
+    accountNumber: '',
+    bvn: '',
+  });
+
+  const [currentUser, setCurrentUser] = useState(user);
 
   const toggleStudentSelection = (rcpt) => {
     setSelectedStudents(prev =>
@@ -43,8 +54,8 @@ export default function Admins({ user }) {
       // Get the highest serial number for verified students in this department/level
       const verifiedRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
         Query.equal("status", "verified"),
-        Query.equal("department", user.department),
-        Query.equal("level", user.level),
+        Query.equal("department", currentUser.department),
+        Query.equal("level", currentUser.level),
         Query.orderDesc("serialNumber"),
         Query.limit(1)
       ]);
@@ -83,8 +94,8 @@ export default function Admins({ user }) {
       if (!selectedStudents) {
         const res = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
           Query.equal("status", "verified"),
-          Query.equal("department", user.department),
-          Query.equal("level", user.level),
+          Query.equal("department", currentUser.department),
+          Query.equal("level", currentUser.level),
           Query.limit(500)
         ]);
         selectedStudents = res.documents;
@@ -94,6 +105,11 @@ export default function Admins({ user }) {
         alert("No verified records found in the database.");
         return;
       }
+
+      // Remove duplicates based on matric number
+      const uniqueStudents = selectedStudents.filter((student, index, self) =>
+        index === self.findIndex(s => s.matric === student.matric)
+      );
 
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.width;
@@ -131,12 +147,12 @@ export default function Admins({ user }) {
 
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(`DEPARTMENT: ${user.department.toUpperCase()}`, 14, 47);
-      doc.text(`LEVEL: ${user.level}L`, 14, 52);
+      doc.text(`DEPARTMENT: ${currentUser.department.toUpperCase()}`, 14, 47);
+      doc.text(`LEVEL: ${currentUser.level}L`, 14, 52);
       doc.text(`DATE GENERATED: ${new Date().toLocaleDateString()}`, 14, 57);
 
       // --- 4. DATA TABLE ---
-      const tableData = selectedStudents.map((s) => [
+      const tableData = uniqueStudents.map((s) => [
         s.serialNumber,
         s.name.toUpperCase(),
         s.matric,
@@ -175,9 +191,9 @@ export default function Admins({ user }) {
       doc.setFontSize(8);
       doc.setTextColor(100);
       doc.text("Admin Signature", 14, finalY + 5);
-      doc.text(user.name, 14, finalY + 10);
+      doc.text(currentUser.name, 14, finalY + 10);
 
-      doc.save(`Classist_Payment_Report_${user.department}.pdf`);
+      doc.save(`Classist_Payment_Report_${currentUser.department}.pdf`);
 
     } catch (error) {
       console.error("PDF Export Error:", error);
@@ -229,8 +245,8 @@ export default function Admins({ user }) {
       doc.setFont("helvetica", "normal");
       doc.text(`Student: ${student.name.toUpperCase()}`, 14, 50);
       doc.text(`Matric No: ${student.matric}`, 14, 57);
-      doc.text(`Department: ${user.department.toUpperCase()}`, 14, 64);
-      doc.text(`Level: ${user.level}L`, 14, 71);
+      doc.text(`Department: ${currentUser.department.toUpperCase()}`, 14, 64);
+      doc.text(`Level: ${currentUser.level}L`, 14, 71);
       doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 78);
 
       // --- 4. PAYMENT DETAILS TABLE ---
@@ -268,7 +284,7 @@ export default function Admins({ user }) {
       doc.setFontSize(8);
       doc.setTextColor(100);
       doc.text("Admin Signature", 14, finalY + 5);
-      doc.text(user.name, 14, finalY + 10);
+      doc.text(currentUser.name, 14, finalY + 10);
 
       doc.save(`Receipt_${student.name.replace(/\s+/g, '_')}.pdf`);
 
@@ -281,7 +297,91 @@ export default function Admins({ user }) {
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
+  const handleAccountDetailsSubmit = async () => {
+    // Validation
+    if (!accountDetails.name.trim() || !accountDetails.bank.trim() || !accountDetails.accountNumber.trim() || !accountDetails.bvn.trim()) {
+      Swal.fire({
+        title: 'Error!',
+        text: 'All fields are required.',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+      return;
+    }
+    if (isNaN(accountDetails.accountNumber)) {
+      Swal.fire({
+        title: 'Error!',
+        text: 'Account number must be numeric.',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+      return;
+    }
+    if (accountDetails.accountNumber.length > 50) {
+      Swal.fire({
+        title: 'Error!',
+        text: 'Account number must not exceed 50 characters.',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+      return;
+    }
+
+    try {
+      // Update the user's profile with account details
+      await databases.updateDocument(Config.dbId, Config.profilesCol, currentUser.$id, {
+        bankName: accountDetails.bank,
+        accountNumber: accountDetails.accountNumber,
+        accountName: accountDetails.name,
+        bvn: accountDetails.bvn,
+      });
+      setShowPromotionPopup(false);
+      Swal.fire({
+        title: 'Success!',
+        text: 'Account details saved successfully!',
+        icon: 'success',
+        confirmButtonText: 'OK'
+      });
+    } catch (error) {
+      console.error('Error saving account details:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to save account details. Please check the data and try again.',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
   // --- FETCH LOGIC ---
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const authUser = await account.get();
+        const profile = await databases.getDocument(Config.dbId, Config.profilesCol, authUser.$id);
+        setCurrentUser(profile);
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+    };
+    fetchUser();
+    const interval = setInterval(fetchUser, 10000); // Refetch every 10 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const authUser = await account.get();
+        const profile = await databases.getDocument(Config.dbId, Config.profilesCol, authUser.$id);
+        setCurrentUser(profile);
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+    };
+    fetchUser();
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!Config.dbId || !Config.profilesCol) return;
@@ -290,9 +390,9 @@ export default function Admins({ user }) {
       try {
         if (activeContent === "manageStudents") {
           const res = await databases.listDocuments(Config.dbId, Config.profilesCol, [
-            Query.equal("school", [user.school]),
-            Query.equal("department", [user.department]),
-            Query.equal("level", [user.level]),
+            Query.equal("school", [currentUser.school]),
+            Query.equal("department", [currentUser.department]),
+            Query.equal("level", [currentUser.level]),
             Query.orderAsc("full_name"),
           ]);
           setStudents(res.documents);
@@ -302,8 +402,8 @@ export default function Admins({ user }) {
           // 1. Fetch Pending (what you already have)
           const pendingRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
             Query.equal("type", "receipt"),
-            Query.equal("department", user.department),
-            Query.equal("level", user.level),
+            Query.equal("department", currentUser.department),
+            Query.equal("level", currentUser.level),
             Query.notEqual("status", "verified") // Show only those not yet cleared
           ]);
           setReceipts(pendingRes.documents);
@@ -311,17 +411,21 @@ export default function Admins({ user }) {
           // 2. Fetch already Verified (to show in the bottom table)
           const verifiedRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
             Query.equal("status", "verified"),
-            Query.equal("department", user.department),
-            Query.equal("level", user.level)
+            Query.equal("department", currentUser.department),
+            Query.equal("level", currentUser.level)
           ]);
-          setSelectedStudents(verifiedRes.documents);
+          // Remove duplicates based on matric number
+          const uniqueVerified = verifiedRes.documents.filter((student, index, self) =>
+            index === self.findIndex(s => s.matric === student.matric)
+          );
+          setSelectedStudents(uniqueVerified);
         }
 
         if (activeContent === "submission") {
           const assignmentRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
             Query.equal("type", "assignment"),
-            Query.equal("department", user.department),
-            Query.equal("level", user.level),
+            Query.equal("department", currentUser.department),
+            Query.equal("level", currentUser.level),
             Query.orderDesc("$createdAt")
           ]);
           setAssignments(assignmentRes.documents);
@@ -334,7 +438,13 @@ export default function Admins({ user }) {
     };
 
     fetchData();
-  }, [activeContent, user]);
+  }, [activeContent, currentUser]);
+
+  useEffect(() => {
+    if (currentUser.role === 'admin' && !currentUser.bankName) {
+      setShowPromotionPopup(true);
+    }
+  }, [currentUser]);
 
   // Helper for profile cards
   function ProfileField({ label, value }) {
@@ -391,8 +501,8 @@ export default function Admins({ user }) {
         {/* Main Content */}
         <main className="flex-1 p-6 md:p-10">
           <header className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-800">{user.name} Dashboard</h1>
-            <p className="text-gray-500 text-sm">Managing {user.level}L Students | {user.school}</p>
+            <h1 className="text-2xl font-bold text-gray-800">{currentUser.name} Dashboard</h1>
+            <p className="text-gray-500 text-sm">Managing {currentUser.level}L Students | {currentUser.school}</p>
           </header>
 
           {/* VIEW STUDENTS TABLE */}
@@ -592,15 +702,15 @@ export default function Admins({ user }) {
                       </div>
                     </div>
                     <div className="flex-1">
-                      <h2 className="text-2xl font-bold text-gray-800">{user.name}</h2>
-                      <p className="text-gray-500">{user.email}</p>
+                      <h2 className="text-2xl font-bold text-gray-800">{currentUser.name}</h2>
+                      <p className="text-gray-500">{currentUser.email}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ProfileField label="Institution" value={user.school} />
-                    <ProfileField label="Faculty" value={user.faculty} />
-                    <ProfileField label="Department" value={user.department} />
-                    <ProfileField label="Management Level" value={`${user.level} Level`} />
+                    <ProfileField label="Institution" value={currentUser.school} />
+                    <ProfileField label="Faculty" value={currentUser.faculty} />
+                    <ProfileField label="Department" value={currentUser.department} />
+                    <ProfileField label="Management Level" value={`${currentUser.level} Level`} />
                   </div>
                 </div>
               </div>
@@ -633,6 +743,71 @@ export default function Admins({ user }) {
             >
               <ExternalLink size={20} /> Open in New Tab
             </a>
+          </div>
+        </div>
+      )}
+
+      {/* --- PROMOTION POPUP --- */}
+      {showPromotionPopup && (
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 md:p-10">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle size={32} className="text-teal-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Congratulations!</h2>
+              <p className="text-gray-600">You have been promoted to an Admin.</p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+                <input
+                  type="text"
+                  value={accountDetails.name}
+                  onChange={(e) => setAccountDetails({ ...accountDetails, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="Enter your account name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                <input
+                  type="text"
+                  value={accountDetails.bank}
+                  onChange={(e) => setAccountDetails({ ...accountDetails, bank: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="Enter your bank name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
+                <input
+                  type="text"
+                  value={accountDetails.accountNumber}
+                  onChange={(e) => setAccountDetails({ ...accountDetails, accountNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="Enter your account number"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">BVN</label>
+                <input
+                  type="text"
+                  value={accountDetails.bvn}
+                  onChange={(e) => setAccountDetails({ ...accountDetails, bvn: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="Enter your BVN"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleAccountDetailsSubmit}
+              className="w-full bg-teal-600 text-white py-3 rounded-lg font-semibold hover:bg-teal-700 transition-colors"
+            >
+              Save Account Details
+            </button>
           </div>
         </div>
       )}

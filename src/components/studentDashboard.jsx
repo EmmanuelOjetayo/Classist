@@ -17,6 +17,8 @@ export default function StudentDashboard() {
   const [studentProfile, setStudentProfile] = useState(null);
   const [history, setHistory] = useState([]);
   const [serialNumber, setSerialNumber] = useState(null);
+  const [adminAccountDetails, setAdminAccountDetails] = useState(null);
+  const [showAdminDetails, setShowAdminDetails] = useState(false);
 
 
   // --- FETCH DATA LOGIC ---
@@ -53,6 +55,26 @@ export default function StudentDashboard() {
       }
     } catch (error) {
       console.error("History fetch error:", error);
+    }
+  };
+
+  const fetchAdminAccountDetails = async () => {
+    try {
+      // Fetch profiles that have accountNumber (assuming admins have account details)
+      const response = await databases.listDocuments(
+        Config.dbId,
+        Config.profilesCol,
+        [
+          Query.notEqual("accountNumber", null),
+          Query.notEqual("accountNumber", "")
+        ]
+      );
+      if (response.documents.length > 0) {
+        // For now, take the first one; in future, filter by faculty/school if needed
+        setAdminAccountDetails(response.documents[0]);
+      }
+    } catch (error) {
+      console.error("Error fetching admin account details:", error);
     }
   };
 

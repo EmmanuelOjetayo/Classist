@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Header from "./header";
 import { useForm } from "react-hook-form";
 import { databases, Config, ID, account, Query } from "../backend/appwrite"; // Added Query and account
-import { Menu, X, BookOpen, Users, Settings, Edit, Trash2, Plus, Loader2, Search, ShieldCheck, UserCog } from "lucide-react";
+import { Menu, X, BookOpen, Users, Settings, Edit, Trash2, Plus, Loader2, Search, UserCog, ShieldCheck } from "lucide-react";
 import Swal from 'sweetalert2';
 
 // --- Custom Toast Component (Remains same) ---
@@ -39,23 +39,23 @@ export default function SuperAdmins() {
 
   // --- APPWRITE LOGIC ---
 
-  const fetchCourses = async () => {
+  const fetchCourses = useCallback(async () => {
     setLoading(true);
     try {
       const res = await databases.listDocuments(Config.dbId, Config.coursesCol);
       setAllcourses(res.documents);
     } catch (e) { showToast(e.message, 'error'); }
     finally { setLoading(false); }
-  };
+  }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await databases.listDocuments(Config.dbId, Config.profilesCol);
       setAllUsers(res.documents);
     } catch (e) { showToast(e.message, 'error'); }
     finally { setLoading(false); }
-  };
+  }, []);
 
   // Fetch Admin's own profile on mount
   useEffect(() => {
@@ -153,8 +153,21 @@ export default function SuperAdmins() {
   const toggleUserRole = async (userId, currentRole) => {
     const newRole = currentRole === 'admin' ? 'student' : 'admin';
     try {
-      await databases.updateDocument(Config.dbId, Config.profilesCol, userId, { role: newRole });
-      showToast(`User updated to ${newRole}`, 'success');
+      const updateData = {
+        role: newRole
+      };
+      if (newRole === 'admin') {
+        updateData.bankName = '';
+        updateData.accountNumber = '';
+        updateData.accountName = '';
+        updateData.bvn = '';
+      }
+      await databases.updateDocument(Config.dbId, Config.profilesCol, userId, updateData);
+      if (newRole === 'admin') {
+        showToast(`User promoted to ${newRole}`, 'success');
+      } else {
+        showToast(`User demoted to ${newRole}`, 'success');
+      }
       fetchUsers();
     } catch (e) { showToast(e.message, 'error'); }
   };
@@ -162,7 +175,7 @@ export default function SuperAdmins() {
   useEffect(() => {
     if (activeContent === "viewCourses") fetchCourses();
     if (activeContent === "manageUsers") fetchUsers();
-  }, [activeContent]);
+  }, [activeContent, fetchCourses, fetchUsers]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pt-14">
@@ -387,6 +400,8 @@ export default function SuperAdmins() {
 
         </main>
       </div>
+
+      {/* Promotion Modal */}
     </div>
   );
 }
