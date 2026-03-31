@@ -60,18 +60,15 @@ export default function StudentDashboard() {
 
   const fetchAdminAccountDetails = async () => {
     try {
-      // Fetch profiles that have accountNumber (assuming admins have account details)
+      // Fetch all profiles and filter those with accountNumber
       const response = await databases.listDocuments(
         Config.dbId,
-        Config.profilesCol,
-        [
-          Query.notEqual("accountNumber", null),
-          Query.notEqual("accountNumber", "")
-        ]
+        Config.profilesCol
       );
-      if (response.documents.length > 0) {
+      const adminsWithDetails = response.documents.filter(profile => profile.accountNumber && profile.accountNumber.trim() !== '');
+      if (adminsWithDetails.length > 0) {
         // For now, take the first one; in future, filter by faculty/school if needed
-        setAdminAccountDetails(response.documents[0]);
+        setAdminAccountDetails(adminsWithDetails[0]);
       }
     } catch (error) {
       console.error("Error fetching admin account details:", error);
@@ -110,6 +107,8 @@ export default function StudentDashboard() {
         }
         // Fetch history initially
         await fetchHistory();
+        // Fetch admin account details
+        await fetchAdminAccountDetails();
       } catch (error) {
         console.error("Error fetching context:", error);
       } finally {
@@ -262,6 +261,20 @@ export default function StudentDashboard() {
               View History
             </button>
           </div>
+
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:border-teal-100 transition-all group">
+            <div className="w-14 h-14 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+              <BookCheck size={28} />
+            </div>
+            <h5 className="text-xl font-bold text-gray-800 mb-3">Admin Account Details</h5>
+            <p className="text-gray-500 text-sm leading-relaxed mb-6">View the admin's account details for payments.</p>
+            <button
+              className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 transition-all active:scale-95"
+              onClick={() => setShowAdminDetails(true)}
+            >
+              View Details
+            </button>
+          </div>
         </div>
       </main>
 
@@ -361,6 +374,40 @@ export default function StudentDashboard() {
                     )}
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- ADMIN ACCOUNT DETAILS MODAL --- */}
+      {showAdminDetails && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[101] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-green-600 p-6 text-white flex justify-between items-center">
+              <h3 className="text-xl font-bold">Admin Account Details</h3>
+              <button onClick={() => setShowAdminDetails(false)} className="hover:bg-white/20 p-2 rounded-xl transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              {adminAccountDetails ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                    <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">{adminAccountDetails.bankName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+                    <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">{adminAccountDetails.accountName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
+                    <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">{adminAccountDetails.accountNumber || 'N/A'}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-10 text-slate-400">No admin account details found.</div>
               )}
             </div>
           </div>
