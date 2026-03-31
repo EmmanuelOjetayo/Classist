@@ -2,14 +2,19 @@ import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 // Added Eye and EyeOff icons
-import { LogIn as LogInIcon, Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { account } from "../backend/appwrite";
+import logo from "../assets/logo.png";
 
 const Login = ({ onAuthSuccess }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   // State for password visibility
   const [showPassword, setShowPassword] = useState(false);
+  // State for forgot password
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const {
     register,
@@ -28,45 +33,63 @@ const Login = ({ onAuthSuccess }) => {
     }
   }, [dialog.open]);
 
-const onSubmit = async (data) => {
-  setLoading(true);
-  const { identifier, password } = data;
+  const onSubmit = async (data) => {
+    setLoading(true);
+    const { identifier, password } = data;
 
-  try {
-    // 1. Clear old session
-    try { await account.deleteSession('current'); } catch (e) {}
+    try {
+      // 1. Clear old session
+      try { await account.deleteSession('current'); } catch (e) { }
 
-    // 2. Create the new session in Appwrite Auth
-    await account.createEmailPasswordSession(identifier, password);
+      // 2. Create the new session in Appwrite Auth
+      await account.createEmailPasswordSession(identifier, password);
 
-    // 3. CALL THE PROP: This runs fetchUser in App.jsx
-    // This is the "onAuthSuccess" you just added to the function arguments above
-    const verifiedUser = await onAuthSuccess();
+      // 3. CALL THE PROP: This runs fetchUser in App.jsx
+      // This is the "onAuthSuccess" you just added to the function arguments above
+      const verifiedUser = await onAuthSuccess();
 
-    if (verifiedUser) {
+      if (verifiedUser) {
+        setDialog({
+          open: true,
+          msg: "Login successful! Redirecting...",
+          type: "success",
+        });
+
+        // 4. Navigate based on the role we just fetched
+        setTimeout(() => {
+          if (verifiedUser.role === 'superAdmin') navigate("/superAdmin");
+          else if (verifiedUser.role === 'admin') navigate("/admin");
+          else navigate("/student");
+        }, 1500);
+      }
+    } catch (error) {
       setDialog({
         open: true,
-        msg: "Login successful! Redirecting...",
-        type: "success",
+        msg: error.message || "Login failed.",
+        type: "error",
       });
-
-      // 4. Navigate based on the role we just fetched
-      setTimeout(() => {
-        if (verifiedUser.role === 'superAdmin') navigate("/superAdmin");
-        else if (verifiedUser.role === 'admin') navigate("/admin");
-        else navigate("/student");
-      }, 1500);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    setDialog({
-      open: true,
-      msg: error.message || "Login failed.",
-      type: "error",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail) {
+      setDialog({ open: true, msg: "Please enter your email.", type: "error" });
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await account.createRecovery(forgotEmail, `${window.location.origin}/reset-password`);
+      setDialog({ open: true, msg: "Password reset email sent! Check your inbox.", type: "success" });
+      setForgotPasswordOpen(false);
+      setForgotEmail("");
+    } catch (error) {
+      setDialog({ open: true, msg: error.message || "Failed to send reset email.", type: "error" });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
   const FormField = ({ label, name, children }) => (
     <div className="flex flex-col">
       <label htmlFor={name} className="text-sm font-medium text-teal-700 mb-1">
@@ -79,12 +102,12 @@ const onSubmit = async (data) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 sm:p-10 w-full max-w-md rounded-xl shadow-2xl">
-        
+
         <div className="flex justify-center mb-6">
-          <LogInIcon size={48} className="text-amber-500" />
+          <img src={logo} alt="Classist Logo" className="h-16 w-16 object-contain" />
         </div>
 
-        <h2 className="text-3xl font-extrabold text-teal-700 mb-8 text-center">
+        <h2 className="text-3xl f`ont-extrabold text-teal-700 mb-8 text-center">
           Classist Login
         </h2>
 
@@ -126,7 +149,7 @@ const onSubmit = async (data) => {
             className="w-full bg-amber-500 py-3 rounded-xl font-bold hover:bg-amber-600 transition text-white disabled:opacity-50"
           >
             <span className="flex items-center justify-center">
-              {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <LogInIcon size={20} className="mr-2" />}
+              {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : null}
               Proceed to Dashboard
             </span>
           </button>
@@ -135,6 +158,9 @@ const onSubmit = async (data) => {
         <p className="text-center mt-6 text-sm text-gray-500">
           Don’t have an account?{" "}
           <Link to="/signup" className="text-emerald-800 font-bold underline">Signup here</Link>
+        </p>
+        <p className="text-center mt-2 text-sm text-gray-500">
+          <button onClick={() => setForgotPasswordOpen(true)} className="text-teal-600 font-bold underline">Forgot Password?</button>
         </p>
       </div>
 
@@ -146,6 +172,37 @@ const onSubmit = async (data) => {
             </h2>
             <p className="text-gray-700">{dialog.msg}</p>
             <p className="text-xs text-gray-400 mt-3">Closing automatically...</p>
+          </div>
+        </div>
+      )}
+
+      {forgotPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4">
+            <h2 className="text-xl font-bold mb-4 text-teal-700">Forgot Password</h2>
+            <p className="text-gray-600 mb-4">Enter your email to receive a reset link.</p>
+            <input
+              type="email"
+              placeholder="your@email.com"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              className="w-full p-3 border rounded-lg mb-4"
+            />
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setForgotPasswordOpen(false)}
+                className="flex-1 bg-gray-300 py-2 rounded-lg font-bold hover:bg-gray-400 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForgotPassword}
+                disabled={forgotLoading}
+                className="flex-1 bg-amber-500 py-2 rounded-lg font-bold hover:bg-amber-600 transition text-white disabled:opacity-50"
+              >
+                {forgotLoading ? "Sending..." : "Send Reset Email"}
+              </button>
+            </div>
           </div>
         </div>
       )}
