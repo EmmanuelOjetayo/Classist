@@ -3,19 +3,12 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { account, databases, ID, Config } from "../backend/appwrite";
 import {
-  ChevronRight, Loader2, School, GraduationCap,
-  BookOpen, Phone, Mail, Lock, User,
+  ChevronRight, Loader2, BookOpen,
+  Phone, Mail, Lock, User,
   CheckCircle2, Eye, EyeOff
 } from "lucide-react";
 import Swal from "sweetalert2";
 import logo from "../assets/logo.png";
-
-const UNIVERSITY_DATA = {
-  LAUTECH: { faculties: { "Engineering & Tech": ["Computer Science", "Mechanical Engineering"], "Pure & Applied Sciences": ["Biology", "Physics"], "Management Sciences": ["Accounting"] } },
-  UNILAG: { faculties: { "Arts": ["English", "History"], "Engineering": ["Systems Engineering"], "Social Sciences": ["Economics"] } },
-  UI: { faculties: { "Agriculture": ["Agronomy"], "Technology": ["Mechanical Engineering"], "Law": ["Public Law"] } },
-  OAU: { faculties: { "Technology": ["Computer Engineering"], "Administration": ["International Relations"] } }
-};
 
 const FormField = ({ label, icon: Icon, children, error, className = "" }) => (
   <div className={`flex flex-col space-y-1 ${className}`}>
@@ -37,12 +30,7 @@ const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   // Watch fields for conditional logic
-  const selectedSchool = watch("school");
-  const selectedFaculty = watch("faculty");
   const password = watch("password");
-
-  const faculties = selectedSchool && UNIVERSITY_DATA[selectedSchool] ? Object.keys(UNIVERSITY_DATA[selectedSchool].faculties) : [];
-  const departments = selectedSchool && selectedFaculty && UNIVERSITY_DATA[selectedSchool].faculties[selectedFaculty] ? UNIVERSITY_DATA[selectedSchool].faculties[selectedFaculty] : [];
 
   const onSubmit = async (data) => {
     setLoading(true);
@@ -53,9 +41,6 @@ const SignUp = () => {
         user_id: userAccount.$id,
         full_name,
         matric_number: data.matric_number,
-        school_name: data.school,
-        faculty: data.faculty,
-        department: data.department,
         level: String(data.level),
         phone: data.phone
       });
@@ -86,7 +71,7 @@ const SignUp = () => {
         <div className="bg-teal-800 md:w-1/3 p-8 text-white flex flex-col justify-between hidden md:flex">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 bg-amber-400 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center">
                 <BookOpen size={18} className="text-teal-900" />
               </div>
               <h2 className="text-2xl font-black tracking-tight text-white">Classist.</h2>
@@ -118,7 +103,7 @@ const SignUp = () => {
         {/* Form Content */}
         <div className="p-6 md:p-10 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-amber-400 p-1 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg p-1 flex items-center justify-center">
               <img src={logo} alt="Classist Logo" className="w-full h-full object-contain" />
             </div>
             <h2 className="text-2xl font-black text-slate-800">Classist Sign Up</h2>
@@ -143,28 +128,6 @@ const SignUp = () => {
 
             {/* Academic Group */}
             <div className="space-y-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-              <FormField label="University" icon={School} error={errors.school}>
-                <select {...register("school", { required: "Required" })} className={inputClass}>
-                  <option value="">Choose Institution</option>
-                  {Object.keys(UNIVERSITY_DATA).map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Faculty" icon={GraduationCap} error={errors.faculty}>
-                  <select {...register("faculty", { required: "Required" })} disabled={!selectedSchool} className={inputClass}>
-                    <option value="">Select Faculty</option>
-                    {faculties.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Department" icon={BookOpen} error={errors.department}>
-                  <select {...register("department", { required: "Required" })} disabled={!selectedFaculty} className={inputClass}>
-                    <option value="">Select Dept</option>
-                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </FormField>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <FormField label="Matric Number" error={errors.matric_number}>
                   <input {...register("matric_number", { required: "Required" })} placeholder="20/1234" className={inputClass} />
