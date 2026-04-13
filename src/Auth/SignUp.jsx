@@ -5,7 +5,7 @@ import { account, databases, ID, Config } from "../backend/appwrite";
 import {
   ChevronRight, Loader2, BookOpen,
   Phone, Mail, Lock, User,
-  CheckCircle2, Eye, EyeOff
+  CheckCircle2, Eye, EyeOff, Hash
 } from "lucide-react";
 import Swal from "sweetalert2";
 import logo from "../assets/logo.png";
@@ -29,19 +29,22 @@ const SignUp = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Watch fields for conditional logic
   const password = watch("password");
 
   const onSubmit = async (data) => {
     setLoading(true);
     const full_name = `${data.surname} ${data.firstName} ${data.middleName}`.trim();
     try {
+      // 1. Create the Auth Account
       const userAccount = await account.create(ID.unique(), data.email, data.password, full_name);
+
+      // 2. Create the Database Document (Profile)
+      // Note: We use the classcode from the form data here
       await databases.createDocument(Config.dbId, Config.profilesCol, userAccount.$id, {
         user_id: userAccount.$id,
         full_name,
         matric_number: data.matric_number,
-        level: String(data.level),
+        classcode: data.classcode, // Updated: Saving classcode instead of level
         phone: data.phone
       });
 
@@ -55,7 +58,12 @@ const SignUp = () => {
 
       setTimeout(() => navigate("/login"), 2000);
     } catch (error) {
-      Swal.fire({ icon: 'error', title: 'Registration Failed', text: error.message, confirmButtonColor: '#0f766e' });
+      Swal.fire({
+        icon: 'error',
+        title: 'Registration Failed',
+        text: error.message,
+        confirmButtonColor: '#0f766e'
+      });
     } finally {
       setLoading(false);
     }
@@ -109,7 +117,7 @@ const SignUp = () => {
             <h2 className="text-2xl font-black text-slate-800">Classist Sign Up</h2>
           </div>
           <header className="mb-8">
-            <p className="text-slate-400 text-xs">Enter your details to join your campus network.</p>
+            <p className="text-slate-400 text-xs"></p>
           </header>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -129,14 +137,17 @@ const SignUp = () => {
             {/* Academic Group */}
             <div className="space-y-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
               <div className="grid grid-cols-2 gap-4">
-                <FormField label="Matric Number" error={errors.matric_number}>
+                <FormField label="Matric Number" icon={Hash} error={errors.matric_number}>
                   <input {...register("matric_number", { required: "Required" })} placeholder="20/1234" className={inputClass} />
                 </FormField>
-                <FormField label="Current Level" error={errors.level}>
-                  <select {...register("level", { required: "Required" })} className={inputClass}>
-                    <option value="">Level</option>
-                    {[100, 200, 300, 400, 500].map(lvl => <option key={lvl} value={lvl}>{lvl}</option>)}
-                  </select>
+
+                {/* UPDATED FIELD: LEVEL -> CLASSCODE */}
+                <FormField label="Paste your Classcode" icon={Lock} error={errors.classcode}>
+                  <input
+                    {...register("classcode", { required: "Classcode is required" })}
+                    placeholder="classcode e.g 25889Agh"
+                    className={inputClass}
+                  />
                 </FormField>
               </div>
             </div>
