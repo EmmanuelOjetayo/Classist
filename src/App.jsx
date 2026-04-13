@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { account, databases, Config } from './backend/appwrite';
 import { Loader2 } from 'lucide-react';
-import { Query } from "appwrite"; 
+import { Query } from "appwrite";
 
 // Page Imports
 import Home from './components/Home';
 import StudentDashboard from './components/studentDashboard';
 import Login from './Auth/Login';
 import SignUp from './Auth/SignUp';
+import ResetPassword from './Auth/ResetPassword';
 import SuperAdmins from './components/superAdmin';
 import Admins from './components/admins';
 
@@ -82,13 +83,14 @@ function App() {
         <Route path='/' element={<Home />} />
         <Route path='/signup' element={<SignUp />} />
         <Route path='/login' element={<Login onAuthSuccess={syncUserSession} />} />
+        <Route path='/reset-password' element={<ResetPassword />} />
 
         {/* The Dispatcher: This handles the "/user" logic specifically */}
         <Route path='/user' element={
-          !user ? <Navigate to="/login" replace /> : 
-          user.role === 'superAdmin' ? <Navigate to="/superAdmin" replace /> :
-          user.role === 'admin' ? <Navigate to="/admin" replace /> :
-          <Navigate to="/student" replace />
+          !user ? <Navigate to="/login" replace /> :
+            user.role === 'superAdmin' ? <Navigate to="/superAdmin" replace /> :
+              user.role === 'admin' ? <Navigate to="/admin" replace /> :
+                <Navigate to="/student" replace />
         } />
 
         {/* Protected Routes */}
@@ -100,7 +102,7 @@ function App() {
 
         <Route path='/admin' element={
           <Protected user={user} allowedRole="admin">
-            <Admins user={user}/>
+            <Admins user={user} />
           </Protected>
         } />
 

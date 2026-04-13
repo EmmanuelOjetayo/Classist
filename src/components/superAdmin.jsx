@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Header from "./header";
 import { useForm } from "react-hook-form";
 import { databases, Config, ID, account, Query } from "../backend/appwrite"; // Added Query and account
-import { Menu, X, BookOpen, Users, Settings, Edit, Trash2, Plus, Loader2, Search, ShieldCheck, UserCog } from "lucide-react";
+import { Menu, X, BookOpen, Users, Settings, Edit, Trash2, Plus, Loader2, Search, UserCog, ShieldCheck } from "lucide-react";
 import Swal from 'sweetalert2';
 
 // --- Custom Toast Component (Remains same) ---
@@ -39,23 +39,23 @@ export default function SuperAdmins() {
 
   // --- APPWRITE LOGIC ---
 
-  const fetchCourses = async () => {
+  const fetchCourses = useCallback(async () => {
     setLoading(true);
     try {
       const res = await databases.listDocuments(Config.dbId, Config.coursesCol);
       setAllcourses(res.documents);
     } catch (e) { showToast(e.message, 'error'); }
     finally { setLoading(false); }
-  };
+  }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await databases.listDocuments(Config.dbId, Config.profilesCol);
       setAllUsers(res.documents);
     } catch (e) { showToast(e.message, 'error'); }
     finally { setLoading(false); }
-  };
+  }, []);
 
   // Fetch Admin's own profile on mount
   useEffect(() => {
@@ -153,8 +153,21 @@ export default function SuperAdmins() {
   const toggleUserRole = async (userId, currentRole) => {
     const newRole = currentRole === 'admin' ? 'student' : 'admin';
     try {
-      await databases.updateDocument(Config.dbId, Config.profilesCol, userId, { role: newRole });
-      showToast(`User updated to ${newRole}`, 'success');
+      const updateData = {
+        role: newRole
+      };
+      if (newRole === 'admin') {
+        updateData.bankName = '';
+        updateData.accountNumber = '';
+        updateData.accountName = '';
+        updateData.bvn = '';
+      }
+      await databases.updateDocument(Config.dbId, Config.profilesCol, userId, updateData);
+      if (newRole === 'admin') {
+        showToast(`User promoted to ${newRole}`, 'success');
+      } else {
+        showToast(`User demoted to ${newRole}`, 'success');
+      }
       fetchUsers();
     } catch (e) { showToast(e.message, 'error'); }
   };
@@ -162,24 +175,24 @@ export default function SuperAdmins() {
   useEffect(() => {
     if (activeContent === "viewCourses") fetchCourses();
     if (activeContent === "manageUsers") fetchUsers();
-  }, [activeContent]);
+  }, [activeContent, fetchCourses, fetchUsers]);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pt-14">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-14">
       <Header />
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
       <div className="flex max-w-[1600px] mx-auto min-h-[calc(100vh-80px)]">
 
         {/* Sidebar */}
-        <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/80 backdrop-blur-xl border-r border-slate-200 transform transition-all duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/5 backdrop-blur-xl border-r border-white/10 transform transition-all duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
           <div className="p-6 h-full flex flex-col">
             <div className="flex items-center gap-3 mb-12 px-2">
-              <div className="bg-teal-700 p-2 rounded-xl shadow-lg"><Settings className="text-white" size={24} /></div>
-              <h2 className="text-xl font-black text-slate-800">SuperHub</h2>
+              <div className="bg-gradient-to-br from-teal-500 to-teal-700 p-2 rounded-xl shadow-lg"><Settings className="text-white" size={24} /></div>
+              <h2 className="text-xl font-black text-white">SuperHub</h2>
             </div>
 
-            <nav className="space-y-1.5 flex-1">
+            <nav className="space-y-2 flex-1">
               {[
                 { key: "viewCourses", label: "Directory", icon: BookOpen },
                 { key: "createCourse", label: "New Course", icon: Plus },
@@ -189,7 +202,7 @@ export default function SuperAdmins() {
                 <button
                   key={item.key}
                   onClick={() => { setActiveContent(item.key); setIsSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold transition-all ${activeContent === item.key ? "bg-teal-700 text-white shadow-xl translate-x-1" : "text-slate-500 hover:bg-slate-100"}`}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all ${activeContent === item.key ? "bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-xl translate-x-1" : "text-white/60 hover:bg-white/10"}`}
                 >
                   <item.icon size={20} /> {item.label}
                 </button>
@@ -199,12 +212,12 @@ export default function SuperAdmins() {
         </aside>
 
         <main className="flex-1 p-6 md:p-12 overflow-y-auto">
-          <button className="md:hidden mb-6 p-3 bg-white border rounded-xl" onClick={() => setIsSidebarOpen(true)}><Menu className="text-teal-700" /></button>
+          <button className="md:hidden mb-6 p-3 bg-gradient-to-r from-teal-600 to-teal-700 text-white border rounded-xl" onClick={() => setIsSidebarOpen(true)}><Menu className="text-white" size={20} /></button>
 
           <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight capitalize">{activeContent.replace(/([A-Z])/g, ' $1')}</h1>
-              <p className="text-slate-500 font-medium">System Management</p>
+              <h1 className="text-4xl font-black text-white tracking-tight capitalize">{activeContent.replace(/([A-Z])/g, ' $1')}</h1>
+              <p className="text-white/60 font-medium mt-2">🔧 System Management</p>
             </div>
 
             {(activeContent === "viewCourses" || activeContent === "manageUsers") && (
@@ -387,6 +400,8 @@ export default function SuperAdmins() {
 
         </main>
       </div>
+
+      {/* Promotion Modal */}
     </div>
   );
 }
