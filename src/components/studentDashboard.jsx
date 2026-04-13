@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback} from "react";
 import Header from "./header";
 import { useForm } from "react-hook-form";
 import Swal from 'sweetalert2';
@@ -20,83 +20,84 @@ export default function StudentDashboard() {
 
 
   // --- FETCH DATA LOGIC ---
-  const fetchHistory = async () => {
-    try {
-      const user = await account.get();
-      const response = await databases.listDocuments(
-        Config.dbId,
-        Config.submissionsCol,
-        [
-          Query.equal("userId", user.$id),
-          Query.orderDesc("$createdAt")
-        ]
-      );
-      setHistory(response.documents);
+// 1. Wrap fetchHistory in useCallback so it's stable
+const fetchHistory = useCallback(async () => {
+  try {
+    const user = await account.get();
+    const response = await databases.listDocuments(
+      Config.dbId,
+      Config.submissionsCol,
+      [Query.equal("userId", user.$id), Query.orderDesc("$createdAt")]
+    );
+    setHistory(response.documents);
 
-      // Fetch latest verified receipt for serial number
-      const verifiedRes = await databases.listDocuments(
+    const verifiedRes = await databases.listDocuments(
+      Config.dbId,
+      Config.submissionsCol,
+      [
+        Query.equal("userId", user.$id),
+        Query.equal("status", "verified"),
+        Query.equal("type", "receipt"),
+        Query.orderDesc("serialNumber"),
+        Query.limit(1)
+      ]
+    );
+
+    if (verifiedRes.documents.length > 0) {
+      setSerialNumber(verifiedRes.documents[0].serialNumber || "Pending assignment");
+    } else {
+      setSerialNumber(null);
+    }
+  } catch (error) {
+    console.error("History fetch error:", error);
+  }
+}, []); // Empty array means this function is created once
+
+// 2. Update the useEffect
+useEffect(() => {
+  const fetchStudentDataAndCourses = async () => {
+    try {
+      setLoading(true);
+      const user = await account.get();
+      
+      // These don't trigger infinite loops if the dependency array is []
+      setValue("name", user.name);
+      setValue("email", user.email);
+
+      const profileRes = await databases.listDocuments(
         Config.dbId,
-        Config.submissionsCol,
-        [
-          Query.equal("userId", user.$id),
-          Query.equal("status", "verified"),
-          Query.equal("type", "receipt"),
-          Query.orderDesc("serialNumber"),
-          Query.limit(1)
-        ]
+        Config.profilesCol,
+        [Query.equal("email", user.email)]
       );
-      if (verifiedRes.documents.length > 0) {
-        const serial = verifiedRes.documents[0].serialNumber;
-        setSerialNumber(serial || "Pending assignment");
-      } else {
-        setSerialNumber(null);
+
+      if (profileRes.documents.length > 0) {
+        const profile = profileRes.documents[0];
+        setStudentProfile(profile);
+        setValue("matric", profile.matricNo);
+
+        const courseRes = await databases.listDocuments(
+          Config.dbId,
+          Config.coursesCol,
+          [
+            Query.equal("faculty", profile.faculty),
+            Query.equal("department", profile.department),
+            Query.equal("level", profile.level)
+          ]
+        );
+        setCourses(courseRes.documents);
       }
+      
+      await fetchHistory();
     } catch (error) {
-      console.error("History fetch error:", error);
+      console.error("Error fetching context:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const fetchStudentDataAndCourses = async () => {
-      try {
-        setLoading(true);
-        const user = await account.get();
-        setValue("name", user.name);
-        setValue("email", user.email);
-
-        const profileRes = await databases.listDocuments(
-          Config.dbId,
-          Config.profilesCol,
-          [Query.equal("email", user.email)]
-        );
-
-        if (profileRes.documents.length > 0) {
-          const profile = profileRes.documents[0];
-          setStudentProfile(profile);
-          setValue("matric", profile.matricNo);
-
-          const courseRes = await databases.listDocuments(
-            Config.dbId,
-            Config.coursesCol,
-            [
-              Query.equal("faculty", profile.faculty),
-              Query.equal("department", profile.department),
-              Query.equal("level", profile.level)
-            ]
-          );
-          setCourses(courseRes.documents);
-        }
-        // Fetch history initially
-        await fetchHistory();
-      } catch (error) {
-        console.error("Error fetching context:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStudentDataAndCourses();
-  }, [setValue]);
+  fetchStudentDataAndCourses();
+  // REMOVE setValue from here to stop the loop
+}, [fetchHistory, setValue]);
 
 
   // --- SUBMISSION HANDLER ---

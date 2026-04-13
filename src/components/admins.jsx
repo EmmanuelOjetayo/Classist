@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Header from "./header";
-import { databases, storage, Config } from "../backend/appwrite";
+import { databases, storage, functions, Config } from "../backend/appwrite";
 import { Query } from "appwrite";
 import {
   Menu, X, Users, BookOpen, BarChart, Loader2,
@@ -20,6 +20,174 @@ export default function Admins({ user }) {
 
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [selectedForReport, setSelectedForReport] = useState([]);
+
+  // 1. Add this state at the top of your Admins component
+const [onboardingData, setOnboardingData] = useState({
+  bank_code: user.bank_code || "",
+  account_number: user.account_number || "",
+  manual_price: user.manual_price || ""
+});
+
+// 2. The Logic Function
+const handleOnboarding = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+
+  // CRITICAL: Force string and remove spaces
+  const cleanAccountNumber = String(onboardingData.account_number).trim();
+  const cleanBankCode = String(onboardingData.bank_code).trim();
+
+  try {
+    const execution = await functions.createExecution(
+      '69caa0e800257591f0b4',
+      JSON.stringify({
+        userId: user.$id,
+        bank_code: cleanBankCode, // Sending as "033" not 33
+        account_number: cleanAccountNumber,
+        manual_price: Number(onboardingData.manual_price)
+      })
+    );
+
+    const result = JSON.parse(execution.responseBody);
+    
+    if (result.success) {
+      alert("Verification successful! You are now a verified Classist Admin.");
+      window.location.reload(); 
+    } else {
+      // result.message will now say "Sorry we couldn't verify..." if FLW fails
+      throw new Error(result.message || "Verification failed");
+    }
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+useEffect(() => {
+  const fetchAdminStatus = async () => {
+    try {
+      // Attempt to fetch the specific admin record using the logged-in User ID
+      const adminDoc = await databases.getDocument(Config.dbId, Config.adminCol, user.$id);
+      
+      // Update the local state with the actual verified data from the 'admins' collection
+      setOnboardingData({
+        bank_code: adminDoc.bank_code || "",
+        account_number: adminDoc.account_number || "",
+        manual_price: adminDoc.manual_price || ""
+      });
+
+      // Update the user object locally to reflect the subaccount and onboarding status
+      user.isOnboarded = adminDoc.isOnboarded;
+      user.subaccount_id = adminDoc.subaccount_id;
+    } catch (err) {
+      console.log("Admin record not found yet. User needs onboarding.");
+    }
+  };
+
+  if (user?.$id) fetchAdminStatus();
+}, [user]);
+
+{activeContent === "profile" && (
+  <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <div className="h-32 bg-gradient-to-r from-teal-600 to-teal-900" />
+      <div className="px-8 pb-8 -mt-12">
+        <div className="flex flex-col md:flex-row items-start md:items-end gap-6 mb-10">
+          <div className="w-28 h-28 bg-white p-1.5 rounded-[2rem] shadow-xl">
+            <div className="w-full h-full bg-teal-50 rounded-[1.5rem] flex items-center justify-center text-teal-700">
+              <UserCircle size={56} />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h2 className="text-3xl font-black text-gray-800">{user.name}</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${user.isOnboarded ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                {user.isOnboarded ? "✓ Verified Classist Admin" : "⚠ Action Required: Onboarding"}
+              </span>
+              {user.subaccount_id && (
+                <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded-md">
+                  ID: {user.subaccount_id}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleOnboarding} className="bg-gray-50 rounded-[2rem] p-6 md:p-10 border border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="md:col-span-2 mb-2">
+            <h3 className="text-xl font-bold text-gray-800">
+              {user.isOnboarded ? "Manage Payouts" : "Merchant Onboarding"}
+            </h3>
+            <p className="text-gray-500 text-sm">
+              {user.isOnboarded 
+                ? "Your bank details are locked. You can update your manual prices below." 
+                : "Enter your bank details to receive automated 95% split payments from students."}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-black text-gray-400 uppercase ml-2">Bank Account</label>
+            <input 
+              disabled={user.isOnboarded}
+              required
+              className="w-full p-4 bg-white border border-gray-200 rounded-2xl font-mono disabled:bg-gray-200 disabled:text-gray-500 outline-none focus:ring-2 ring-teal-500"
+              placeholder="0123456789"
+              value={onboardingData.account_number}
+              onChange={(e) => setOnboardingData({...onboardingData, account_number: e.target.value})}
+            />
+          </div>
+
+         <div className="space-y-2">
+  <label className="text-xs font-black text-gray-400 uppercase ml-2">Select Bank</label>
+  <select 
+    disabled={user.isOnboarded}
+    required
+    className="w-full p-4 bg-white border border-gray-200 rounded-2xl font-sans outline-none focus:ring-2 ring-teal-500"
+    value={onboardingData.bank_code}
+    onChange={(e) => setOnboardingData({...onboardingData, bank_code: e.target.value})}
+  >
+    <option value="">Choose your bank...</option>
+    <option value="999992">OPay</option>
+    <option value="999991">PalmPay</option>
+    <option value="033">UBA (United Bank for Africa)</option>
+    <option value="058">GTBank</option>
+    <option value="044">Access Bank</option>
+    <option value="011">First Bank</option>
+    <option value="057">Zenith Bank</option>
+    <option value="090267">Kuda Bank</option>
+  </select>
+</div>
+
+          <div className="space-y-2 md:col-span-2">
+            <label className="text-xs font-black text-gray-400 uppercase ml-2">Price per Manual (₦)</label>
+            <div className="relative">
+               <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-teal-700">₦</span>
+               <input 
+                required
+                type="number"
+                className="w-full p-4 pl-10 bg-white border border-gray-200 rounded-2xl font-black text-teal-700 text-xl outline-none focus:ring-2 ring-teal-500"
+                placeholder="2500"
+                value={onboardingData.manual_price}
+                onChange={(e) => setOnboardingData({...onboardingData, manual_price: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <button 
+            type="submit"
+            disabled={loading}
+            className={`md:col-span-2 p-5 text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all ${
+              user.isOnboarded ? 'bg-gray-800 hover:bg-black' : 'bg-teal-700 hover:bg-teal-800'
+            } disabled:bg-gray-300`}
+          >
+            {loading ? <Loader2 className="animate-spin" /> : <CheckCircle size={20} />}
+            {user.isOnboarded ? "Update Manual Price" : "Verify & Create Subaccount"}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+)}
 
   const toggleStudentSelection = (rcpt) => {
     setSelectedStudents(prev =>
@@ -580,32 +748,124 @@ export default function Admins({ user }) {
           )}
 
           {/* PROFILE SECTION */}
-          {activeContent === "profile" && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="h-32 bg-gradient-to-r from-teal-600 to-teal-800" />
-                <div className="px-6 pb-8 -mt-12">
-                  <div className="flex flex-col md:flex-row items-start md:items-end gap-5 mb-8">
-                    <div className="w-24 h-24 bg-white p-1 rounded-2xl shadow-md">
-                      <div className="w-full h-full bg-teal-50 rounded-xl flex items-center justify-center text-teal-700">
-                        <UserCircle size={48} />
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <h2 className="text-2xl font-bold text-gray-800">{user.name}</h2>
-                      <p className="text-gray-500">{user.email}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ProfileField label="Institution" value={user.school} />
-                    <ProfileField label="Faculty" value={user.faculty} />
-                    <ProfileField label="Department" value={user.department} />
-                    <ProfileField label="Management Level" value={`${user.level} Level`} />
-                  </div>
-                </div>
+        {activeContent === "profile" && (
+  <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    
+    {/* 1. Profile Identity Card */}
+    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <div className="h-32 bg-gradient-to-r from-teal-600 to-teal-900" />
+      <div className="px-8 pb-8 -mt-12">
+        <div className="flex flex-col md:flex-row items-start md:items-end gap-6 mb-10">
+          <div className="w-28 h-28 bg-white p-1.5 rounded-[2rem] shadow-xl">
+            <div className="w-full h-full bg-teal-50 rounded-[1.5rem] flex items-center justify-center text-teal-700">
+              <UserCircle size={56} />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h2 className="text-3xl font-black text-gray-800">{user.name}</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${user.isOnboarded ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                {user.isOnboarded ? "✓ Verified Merchant" : "⚠ Action Required: Onboarding"}
+              </span>
+              <span className="text-gray-400 text-xs font-medium">| {user.department} Admin</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Basic Info Grid (Read Only) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+          <ProfileField label="Institution" value={user.school} />
+          <ProfileField label="Management Level" value={`${user.level} Level`} />
+          <ProfileField label="Email Address" value={user.email} />
+          <ProfileField label="Faculty" value={user.faculty} />
+        </div>
+
+        {/* 3. Financial Configuration (The Onboarding Form) */}
+        <div className="bg-gray-50 rounded-[2.5rem] p-6 md:p-10 border border-gray-100">
+          <div className="mb-8">
+            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+               Payout Settings
+            </h3>
+            <p className="text-gray-500 text-sm mt-1">
+              {user.isOnboarded 
+                ? "Your bank account is locked for security. Update your manual price below." 
+                : "Link your bank details once to receive automated student payments."}
+            </p>
+          </div>
+
+          <form onSubmit={handleOnboarding} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Account Number */}
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase ml-2">Account Number</label>
+              <input 
+                disabled={user.isOnboarded}
+                required
+                type="text"
+                maxLength={10}
+                className="w-full p-4 bg-white border border-gray-200 rounded-2xl focus:ring-4 ring-teal-500/10 outline-none transition-all font-mono disabled:bg-gray-100 disabled:text-gray-400"
+                placeholder="0123456789"
+                value={onboardingData.account_number}
+                onChange={(e) => setOnboardingData({...onboardingData, account_number: e.target.value})}
+              />
+            </div>
+
+           <div className="space-y-2">
+  <label className="text-xs font-black text-gray-400 uppercase ml-2">Select Bank</label>
+  <select 
+    disabled={user.isOnboarded}
+    required
+    className="w-full p-4 bg-white border border-gray-200 rounded-2xl font-sans outline-none focus:ring-2 ring-teal-500"
+    value={onboardingData.bank_code}
+    onChange={(e) => setOnboardingData({...onboardingData, bank_code: e.target.value})}
+  >
+    <option value="">Choose your bank...</option>
+    <option value="999992">OPay</option>
+    <option value="999991">PalmPay</option>
+    <option value="033">UBA (United Bank for Africa)</option>
+    <option value="058">GTBank</option>
+    <option value="044">Access Bank</option>
+    <option value="011">First Bank</option>
+    <option value="057">Zenith Bank</option>
+    <option value="090267">Kuda Bank</option>
+  </select>
+</div>
+
+            {/* Manual Price */}
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-xs font-black text-gray-400 uppercase ml-2">Price per Manual (₦)</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₦</span>
+                <input 
+                  required
+                  type="number"
+                  className="w-full p-4 pl-10 bg-white border border-gray-200 rounded-2xl focus:ring-4 ring-teal-500/10 outline-none transition-all font-black text-teal-700 text-lg"
+                  placeholder="2500"
+                  value={onboardingData.manual_price}
+                  onChange={(e) => setOnboardingData({...onboardingData, manual_price: e.target.value})}
+                />
               </div>
             </div>
-          )}
+
+            {/* Submit Button */}
+            <button 
+              type="submit"
+              disabled={loading}
+              className="md:col-span-2 mt-4 p-5 bg-teal-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-teal-800 hover:shadow-xl hover:shadow-teal-900/20 active:scale-[0.98] transition-all disabled:bg-gray-300"
+            >
+              {loading ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <CheckCircle size={20} />
+              )}
+              {user.isOnboarded ? "Save Changes" : "Complete Onboarding"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
         </main>
       </div>
 
