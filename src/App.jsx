@@ -13,7 +13,7 @@ import ResetPassword from './Auth/ResetPassword';
 import SuperAdmins from './components/superAdmin';
 import Admins from './components/admins';
 
-// Global Warning Filter (Silences Appwrite's localStorage warning)
+// Global Warning Filter
 if (typeof window !== 'undefined') {
   const originalWarn = console.warn;
   console.warn = (...args) => {
@@ -22,13 +22,17 @@ if (typeof window !== 'undefined') {
   };
 }
 
+// Fixed Protected Component with loop prevention
 const Protected = ({ children, user, allowedRole }) => {
-  // If no user, send to login
   if (!user) return <Navigate to="/login" replace />;
 
-  // If user exists but role doesn't match, send to the dispatcher
-  if (allowedRole && user.role !== allowedRole) {
-    return <Navigate to="/user" replace />;
+  // Normalize roles to avoid "Student" vs "student" mismatches
+  const userRole = user.role?.toString().toLowerCase().trim();
+  const targetRole = allowedRole?.toLowerCase().trim();
+
+  if (targetRole && userRole !== targetRole) {
+    // Redirect to home if role doesn't match to break the /user -> /student loop
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -49,6 +53,7 @@ function App() {
 
       if (profileResponse.documents.length > 0) {
         const profile = profileResponse.documents[0];
+        // Combine Appwrite account session with custom profile data (role, etc.)
         const fullUser = { ...session, ...profile };
         setUser(fullUser);
         return fullUser;
@@ -70,11 +75,13 @@ function App() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin text-teal-600" size={40} />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-teal-600" size={40} />
+          <p className="text-xs font-black uppercase tracking-widest opacity-40">Synchronizing Session</p>
+        </div>
       </div>
     );
   }
-
 
   return (
     <Router>
@@ -85,11 +92,11 @@ function App() {
         <Route path='/login' element={<Login onAuthSuccess={syncUserSession} />} />
         <Route path='/reset-password' element={<ResetPassword />} />
 
-        {/* The Dispatcher: This handles the "/user" logic specifically */}
+        {/* The Dispatcher: Initial landing logic after login */}
         <Route path='/user' element={
           !user ? <Navigate to="/login" replace /> :
-            user.role === 'superAdmin' ? <Navigate to="/superAdmin" replace /> :
-              user.role === 'admin' ? <Navigate to="/admin" replace /> :
+            user.role?.toString().toLowerCase().trim() === 'superadmin' ? <Navigate to="/superAdmin" replace /> :
+              user.role?.toString().toLowerCase().trim() === 'admin' ? <Navigate to="/admin" replace /> :
                 <Navigate to="/student" replace />
         } />
 

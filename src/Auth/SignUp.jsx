@@ -43,8 +43,9 @@ const SignUp = () => {
       await databases.createDocument(Config.dbId, Config.profilesCol, userAccount.$id, {
         user_id: userAccount.$id,
         full_name,
-        matric_number: data.matric_number,
-        classcode: data.classcode, // Updated: Saving classcode instead of level
+        email: data.email,
+        matricNo: data.matric_number,
+        classCode: data.classcode, // Updated: Saving classcode instead of level
         phone: data.phone
       });
 

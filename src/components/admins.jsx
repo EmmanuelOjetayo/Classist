@@ -3,32 +3,33 @@ import Header from "./header";
 import { databases, storage, Config } from "../backend/appwrite";
 import { Query } from "appwrite";
 import {
-  Menu, X, Users, BookOpen, BarChart, Loader2,
+  Menu, X, Users, BookOpen, BarChart, Loader2, ShieldCheck,
   UserCircle, Eye, CheckCircle, Clock, ExternalLink
 } from "lucide-react";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable"; // Import the function directly
+import autoTable from "jspdf-autotable"; 
 import Swal from 'sweetalert2';
 
 export default function Admins({ user }) {
   const [activeContent, setActiveContent] = useState("manageStudents");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [students, setStudents] = useState([]);
-  const [receipts, setReceipts] = useState([]); // Store receipts
-  const [assignments, setAssignments] = useState([]); // Store assignments
-  const [loading, setLoading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null); // For Image Popup
+  const [receipts, setReceipts] = useState([]); 
+  const [assignments, setAssignments] = useState([]); 
+  const [selectedImage, setSelectedImage] = useState(null); 
+  const [showPromotionPopup, setShowPromotionPopup] = useState(false);
+  const [accountDetails, setAccountDetails] = useState({
+    name: "",
+    bankCode: "",
+    accountNumber: "",
+    email: ""
+  });
+
+const [loading, setLoading] = useState(false);
+const [classMeta, setClassMeta] = useState(null);
 
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [selectedForReport, setSelectedForReport] = useState([]);
-
-  const toggleStudentSelection = (rcpt) => {
-    setSelectedStudents(prev =>
-      prev.find(s => s.$id === rcpt.$id)
-        ? prev.filter(s => s.$id !== rcpt.$id)
-        : [...prev, rcpt]
-    );
-  };
 
   const toggleReportSelection = (student) => {
     setSelectedForReport(prev =>
@@ -44,15 +45,14 @@ export default function Admins({ user }) {
       // Get the highest serial number for verified students in this department/level
       const verifiedRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
         Query.equal("status", "verified"),
-        Query.equal("department", currentUser.department),
-        Query.equal("level", currentUser.level),
+        Query.equal("department", user.department),
+        Query.equal("level", user.level),
         Query.orderDesc("serialNumber"),
         Query.limit(1)
       ]);
 
       const nextSerialNumber = verifiedRes.documents.length > 0 ? (verifiedRes.documents[0].serialNumber || 0) + 1 : 1;
 
-      // Update Appwrite with verification and serial number
       await databases.updateDocument(
         Config.dbId,
         Config.submissionsCol,
@@ -63,10 +63,7 @@ export default function Admins({ user }) {
         }
       );
 
-      // Remove from 'receipts' (the pending UI)
       setReceipts(prev => prev.filter(item => item.$id !== rcpt.$id));
-
-      // Add to 'selectedStudents' (the verified UI) with serial number
       setSelectedStudents(prev => [...prev, { ...rcpt, status: "verified", serialNumber: nextSerialNumber }]);
 
     } catch (error) {
@@ -75,74 +72,45 @@ export default function Admins({ user }) {
   };
 
   // 2. Professional PDF Generator
-
-
-  const downloadVerifiedPDF = async (students = null) => {
+  const downloadVerifiedPDF = async (customList = null) => {
     setLoading(true);
     try {
-      let selectedStudents = students;
-      if (!selectedStudents) {
+      let dataToPrint = customList;
+      if (!dataToPrint) {
         const res = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
           Query.equal("status", "verified"),
-          Query.equal("department", currentUser.department),
-          Query.equal("level", currentUser.level),
+          Query.equal("department", user.department),
+          Query.equal("level", user.level),
           Query.limit(500)
         ]);
-        selectedStudents = res.documents;
+        dataToPrint = res.documents;
       }
 
-      if (selectedStudents.length === 0) {
-        alert("No verified records found in the database.");
+      if (dataToPrint.length === 0) {
+        alert("No verified records found.");
         return;
       }
 
-      // Remove duplicates based on matric number
-      const uniqueStudents = selectedStudents.filter((student, index, self) =>
-        index === self.findIndex(s => s.matric === student.matric)
-      );
-
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
 
-      // --- 1. DRAW PAGE BORDER ---
-      doc.setDrawColor(20, 158, 136); // Teal Border
-      doc.setLineWidth(0.5);
-      doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
-
-      // --- 2. LOGO & HEADER ---
-      // Minimalist Logo Icon (A teal square with 'C')
+      // Header Branding
       doc.setFillColor(20, 158, 136);
       doc.roundedRect(14, 12, 12, 12, 2, 2, 'F');
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(10);
       doc.text("C", 18, 20);
-
-      // Classist Branding
       doc.setTextColor(20, 158, 136);
-      doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
       doc.text("CLASSIST", 30, 18);
 
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100);
-      doc.text("ACADEMIC MANAGEMENT & PAYMENT SYSTEM", 30, 23);
-
-      // --- 3. REPORT TITLE & METADATA ---
-      doc.setFontSize(14);
-      doc.setTextColor(40);
-      doc.setFont("helvetica", "bold");
-      doc.text("OFFICIAL PAYMENT CLEARANCE REPORT", 14, 40);
-
+      // Metadata
       doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.text(`DEPARTMENT: ${currentUser.department.toUpperCase()}`, 14, 47);
-      doc.text(`LEVEL: ${currentUser.level}L`, 14, 52);
-      doc.text(`DATE GENERATED: ${new Date().toLocaleDateString()}`, 14, 57);
+      doc.setTextColor(100);
+      doc.text(`DEPARTMENT: ${user.department.toUpperCase()}`, 14, 47);
+      doc.text(`LEVEL: ${user.level}L`, 14, 52);
+      doc.text(`DATE: ${new Date().toLocaleDateString()}`, 14, 57);
 
-      // --- 4. DATA TABLE ---
-      const tableData = uniqueStudents.map((s) => [
+      const tableData = dataToPrint.map((s) => [
         s.serialNumber,
         s.name.toUpperCase(),
         s.matric,
@@ -155,304 +123,191 @@ export default function Admins({ user }) {
         head: [['S/N', 'STUDENT NAME', 'MATRIC NO', 'COURSE CODE', 'STATUS']],
         body: tableData,
         theme: 'grid',
-        headStyles: {
-          fillColor: [20, 158, 136],
-          fontSize: 10,
-          halign: 'center',
-          fontStyle: 'bold'
-        },
-        styles: {
-          fontSize: 9,
-          cellPadding: 3,
-          valign: 'middle'
-        },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 15 },
-          2: { fontStyle: 'italic' },
-          3: { halign: 'center' },
-          4: { halign: 'center', fontStyle: 'bold' }
-        }
+        headStyles: { fillColor: [20, 158, 136] }
       });
 
-      // --- 5. SIGNATURE FOOTER ---
+      // Signature
       const finalY = doc.lastAutoTable.finalY + 25;
-      doc.setDrawColor(200);
       doc.line(14, finalY, 70, finalY);
-      doc.setFontSize(8);
-      doc.setTextColor(100);
       doc.text("Admin Signature", 14, finalY + 5);
-      doc.text(currentUser.name, 14, finalY + 10);
+      doc.text(user.name, 14, finalY + 10);
 
-      doc.save(`Classist_Payment_Report_${currentUser.department}.pdf`);
-
+      doc.save(`Report_${user.department}.pdf`);
     } catch (error) {
       console.error("PDF Export Error:", error);
-      alert("Verification Error: Please ensure jspdf and jspdf-autotable are installed.");
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Individual Student PDF Generator
-  const downloadStudentPDF = async (student) => {
-    try {
-      const doc = new jsPDF();
-      const campFee = 4000;
-      const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
+const handleAccountDetailsSubmit = async () => {
 
-      // --- 1. DRAW PAGE BORDER ---
-      doc.setDrawColor(20, 158, 136); // Teal Border
-      doc.setLineWidth(0.5);
-      doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
+  // 🔒 VALIDATION WITH SWAL
+  if (!accountDetails.name.trim()) {
+    return Swal.fire({
+      icon: "warning",
+      title: "Missing Field",
+      text: "Account name is required"
+    });
+  }
 
-      // --- 2. LOGO & HEADER ---
-      // Minimalist Logo Icon (A teal square with 'C')
-      doc.setFillColor(20, 158, 136);
-      doc.roundedRect(14, 12, 12, 12, 2, 2, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(10);
-      doc.text("C", 18, 20);
+  if (!accountDetails.bankCode) {
+    return Swal.fire({
+      icon: "warning",
+      title: "Missing Field",
+      text: "Please select a bank"
+    });
+  }
 
-      // Classist Branding
-      doc.setTextColor(20, 158, 136);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(18);
-      doc.text("CLASSIST", 30, 18);
+  if (accountDetails.accountNumber.length !== 10) {
+    return Swal.fire({
+      icon: "warning",
+      title: "Invalid Account Number",
+      text: "Account number must be 10 digits"
+    });
+  }
 
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100);
-      doc.text("ACADEMIC MANAGEMENT & PAYMENT SYSTEM", 30, 23);
+  // 🔍 CONFIRMATION STEP (PRO UX)
+  const confirm = await Swal.fire({
+    title: "Confirm Account Details",
+    html: `
+      <p><strong>Name:</strong> ${accountDetails.name}</p>
+      <p><strong>Account Number:</strong> ${accountDetails.accountNumber}</p>
+    `,
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "Proceed",
+    cancelButtonText: "Edit"
+  });
 
-      // --- 3. RECEIPT TITLE ---
-      doc.setFontSize(16);
-      doc.setTextColor(40);
-      doc.setFont("helvetica", "bold");
-      doc.text("PAYMENT RECEIPT", 14, 40);
+  if (!confirm.isConfirmed) return;
 
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Student: ${student.name.toUpperCase()}`, 14, 50);
-      doc.text(`Matric No: ${student.matric}`, 14, 57);
-      doc.text(`Department: ${currentUser.department.toUpperCase()}`, 14, 64);
-      doc.text(`Level: ${currentUser.level}L`, 14, 71);
-      doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 78);
+  setLoading(true);
 
-      // --- 4. PAYMENT DETAILS TABLE ---
-      const tableData = [
-        [1, "Camp Fee", `N${campFee.toLocaleString()}`, "VERIFIED"]
-      ];
+  // 🔄 LOADING STATE
+  Swal.fire({
+    title: "Processing...",
+    text: "Creating your payout account",
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
 
-      autoTable(doc, {
-        startY: 85,
-        head: [['S/N', 'DESCRIPTION', 'AMOUNT', 'STATUS']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [20, 158, 136],
-          fontSize: 10,
-          halign: 'center',
-          fontStyle: 'bold'
-        },
-        styles: {
-          fontSize: 9,
-          cellPadding: 5,
-          valign: 'middle'
-        },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 15 },
-          2: { halign: 'right' },
-          3: { halign: 'center', fontStyle: 'bold' }
-        }
+  try {
+    const payload = {
+      business_name: accountDetails.name,
+      account_bank: accountDetails.bankCode,
+      account_number: accountDetails.accountNumber,
+      business_email: accountDetails.email || "default@email.com",
+      business_contact: accountDetails.name,
+      business_contact_mobile: user?.phone || "08000000000"
+    };
+
+    const response = await functions.createExecution(
+      "69caa0e800257591f0b4",
+      JSON.stringify(payload)
+    );
+
+    const result = JSON.parse(response.response);
+
+    // ❌ ERROR FROM BACKEND
+    if (!result.success) {
+      return Swal.fire({
+        icon: "error",
+        title: "Failed",
+        text: result.message || "Unable to create subaccount"
       });
+    }
 
-      // --- 5. SIGNATURE FOOTER ---
-      const finalY = doc.lastAutoTable.finalY + 25;
-      doc.setDrawColor(200);
-      doc.line(14, finalY, 70, finalY);
-      doc.setFontSize(8);
-      doc.setTextColor(100);
-      doc.text("Admin Signature", 14, finalY + 5);
-      doc.text(currentUser.name, 14, finalY + 10);
+    // ✅ SUCCESS
+    await Swal.fire({
+      icon: "success",
+      title: "Account Setup Successful 🎉",
+      text: "Your payout account has been created successfully"
+    });
 
-      doc.save(`Receipt_${student.name.replace(/\s+/g, '_')}.pdf`);
+    console.log("Subaccount:", result);
 
+    // 🔐 CLOSE POPUP
+    setShowPromotionPopup(false);
+
+    // 🧠 OPTIONAL: Save locally
+    // setUserSubaccount(result.subaccount_id);
+
+  } catch (error) {
+    console.error(error);
+
+    Swal.fire({
+      icon: "error",
+      title: "Network Error",
+      text: "Something went wrong. Please try again."
+    });
+
+  } finally {
+    setLoading(false);
+  }
+};
+
+useEffect(() => {
+  const fetchData = async () => {
+    if (!user?.classCode) return;
+    setLoading(true);
+    try {
+      const code = user.classCode;
+
+      // 1. Fetch Class Metadata (School, Dept, Level, Faculty)
+      const classRes = await databases.listDocuments(Config.dbId, Config.classDataCol, [
+        Query.equal("schoolId", code) // Assuming schoolId stores the classCode
+      ]);
+      if (classRes.documents.length > 0) setClassMeta(classRes.documents[0]);
+
+      // 2. Fetch Content based on active tab
+      if (activeContent === "manageStudents") {
+        const res = await databases.listDocuments(Config.dbId, Config.profilesCol, [
+          Query.equal("classCode", code),
+          Query.orderAsc("full_name"),
+        ]);
+        setStudents(res.documents);
+      }
+      // ... fetch payments/assignments using Query.equal("classCode", code)
     } catch (error) {
-      console.error("PDF Export Error:", error);
-      alert("Error generating PDF. Please try again.");
+      console.error("Registry Fetch Error:", error);
+    } finally {
+      setLoading(false);
     }
   };
+  fetchData();
+}, [activeContent, user]);
 
-
-  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
-  const handleAccountDetailsSubmit = async () => {
-    // Validation
-    if (!accountDetails.name.trim() || !accountDetails.bank.trim() || !accountDetails.accountNumber.trim() || !accountDetails.bvn.trim()) {
-      Swal.fire({
-        title: 'Error!',
-        text: 'All fields are required.',
-        icon: 'error',
-        confirmButtonText: 'OK'
-      });
-      return;
-    }
-    if (isNaN(accountDetails.accountNumber)) {
-      Swal.fire({
-        title: 'Error!',
-        text: 'Account number must be numeric.',
-        icon: 'error',
-        confirmButtonText: 'OK'
-      });
-      return;
-    }
-    if (accountDetails.accountNumber.length > 50) {
-      Swal.fire({
-        title: 'Error!',
-        text: 'Account number must not exceed 50 characters.',
-        icon: 'error',
-        confirmButtonText: 'OK'
-      });
-      return;
-    }
-
-    try {
-      // Update the user's profile with account details
-      await databases.updateDocument(Config.dbId, Config.profilesCol, currentUser.$id, {
-        bankName: accountDetails.bank,
-        accountNumber: accountDetails.accountNumber,
-        accountName: accountDetails.name,
-        bvn: accountDetails.bvn,
-      });
-      setShowPromotionPopup(false);
-      // Update currentUser with the new account details
-      setCurrentUser({
-        ...currentUser,
-        bankName: accountDetails.bank,
-        accountNumber: accountDetails.accountNumber,
-        accountName: accountDetails.name,
-        bvn: accountDetails.bvn,
-      });
-      Swal.fire({
-        title: 'Success!',
-        text: 'Account details saved successfully!',
-        icon: 'success',
-        confirmButtonText: 'OK'
-      });
-    } catch (error) {
-      console.error('Error saving account details:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Failed to save account details. Please check the data and try again.',
-        icon: 'error',
-        confirmButtonText: 'OK'
-      });
-    }
-  };
-
-  // --- FETCH LOGIC ---
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const authUser = await account.get();
-        const profile = await databases.getDocument(Config.dbId, Config.profilesCol, authUser.$id);
-        setCurrentUser(profile);
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
-      }
-    };
-    fetchUser();
-    const interval = setInterval(fetchUser, 10000); // Refetch every 10 seconds
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const authUser = await account.get();
-        const profile = await databases.getDocument(Config.dbId, Config.profilesCol, authUser.$id);
-        setCurrentUser(profile);
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
-      }
-    };
-    fetchUser();
-  }, []);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!Config.dbId || !Config.profilesCol) return;
-      setLoading(true);
-
-      try {
-        if (activeContent === "manageStudents") {
-          const res = await databases.listDocuments(Config.dbId, Config.profilesCol, [
-            Query.equal("school", [currentUser.school]),
-            Query.equal("department", [currentUser.department]),
-            Query.equal("level", [currentUser.level]),
-            Query.orderAsc("full_name"),
-          ]);
-          setStudents(res.documents);
-        }
-
-        if (activeContent === "viewPayment") {
-          // 1. Fetch Pending (what you already have)
-          const pendingRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
-            Query.equal("type", "receipt"),
-            Query.equal("department", currentUser.department),
-            Query.equal("level", currentUser.level),
-            Query.notEqual("status", "verified") // Show only those not yet cleared
-          ]);
-          setReceipts(pendingRes.documents);
-
-          // 2. Fetch already Verified (to show in the bottom table)
-          const verifiedRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
-            Query.equal("status", "verified"),
-            Query.equal("department", currentUser.department),
-            Query.equal("level", currentUser.level)
-          ]);
-          // Remove duplicates based on matric number
-          const uniqueVerified = verifiedRes.documents.filter((student, index, self) =>
-            index === self.findIndex(s => s.matric === student.matric)
-          );
-          setSelectedStudents(uniqueVerified);
-        }
-
-        if (activeContent === "submission") {
-          const assignmentRes = await databases.listDocuments(Config.dbId, Config.submissionsCol, [
-            Query.equal("type", "assignment"),
-            Query.equal("department", currentUser.department),
-            Query.equal("level", currentUser.level),
-            Query.orderDesc("$createdAt")
-          ]);
-          setAssignments(assignmentRes.documents);
-        }
-      } catch (error) {
-        console.error("Fetch error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [activeContent, currentUser]);
-
-  useEffect(() => {
-    if (currentUser.role === 'admin' && !currentUser.accountNumber) {
+    if (user?.role === 'admin' && !user?.accountNumber) {
       setShowPromotionPopup(true);
     }
-  }, [currentUser]);
+  }, [user]);
 
-  // Helper for profile cards
-  function ProfileField({ label, value }) {
-    return (
-      <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-        <p className="text-xs text-gray-400 font-bold uppercase mb-1">{label}</p>
-        <p className="text-gray-800 font-semibold">{value || "Not Specified"}</p>
+// Helper: Transforms "Emmanuel Ojetayo" into "EO"
+const getInitials = (name) => {
+  if (!name) return "??";
+  const parts = name.trim().split(" ");
+  return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : parts[0][0]).toUpperCase();
+};
+
+// Refactored ProfileField
+function ProfileField({ label, value, icon: Icon }) {
+  return (
+    <div className="p-4 bg-white rounded-[2rem] border border-slate-100 flex items-center gap-4 shadow-sm">
+      <div className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center shrink-0">
+        {Icon && <Icon size={18} />}
       </div>
-    );
-  }
+      <div className="min-w-0 text-left">
+        <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">{label}</p>
+        <p className="text-slate-800 font-bold text-xs uppercase truncate">{value || "---"}</p>
+      </div>
+    </div>
+  );
+}
 
   const navItems = [
     { key: "submission", label: "Assignments", icon: BarChart },
@@ -461,34 +316,27 @@ export default function Admins({ user }) {
     { key: "profile", label: "My Profile", icon: UserCircle },
   ];
 
+  if (!user) return null;
+
   return (
     <>
       <Header />
-      {/* Wrapper added pt-14 to prevent content from being hidden under the fixed header */}
       <div className="flex min-h-screen bg-gray-50 pt-14">
-
-        {/* Mobile Toggle - Adjusted top position */}
-        <button
-          onClick={toggleSidebar}
-          className="md:hidden fixed top-[4.5rem] right-4 z-[60] p-3 bg-teal-700 text-white rounded-full shadow-lg transition-transform active:scale-90"
-        >
+        {/* Mobile Toggle */}
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden fixed top-[4.5rem] right-4 z-[60] p-3 bg-teal-700 text-white rounded-full">
           {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
 
-        {/* Sidebar - Adjusted top to 14 (3.5rem) to sit perfectly under header */}
-        <aside className={`w-64 bg-white border-r p-6 transition-transform z-50 fixed top-14 bottom-0 md:sticky md:top-14 md:h-[calc(100vh-3.5rem)] md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        {/* Sidebar */}
+        <aside className={`w-64 bg-white border-r p-6 fixed top-14 bottom-0 md:sticky md:h-[calc(100vh-3.5rem)] transition-transform z-50 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
           <div className="flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 bg-teal-700 rounded-lg flex items-center justify-center text-white font-bold text-sm">A</div>
-            <h2 className="text-lg font-bold text-gray-800 tracking-tight">Admin Hub</h2>
+            <div className="w-8 h-8 bg-teal-700 rounded-lg flex items-center justify-center text-white font-bold">A</div>
+            <h2 className="text-lg font-bold text-gray-800">Admin Hub</h2>
           </div>
-
           <nav className="space-y-1.5">
             {navItems.map((item) => (
-              <div
-                key={item.key}
-                onClick={() => { setActiveContent(item.key); setIsSidebarOpen(false); }}
-                className={`flex items-center space-x-3 cursor-pointer px-4 py-2.5 rounded-xl transition-all text-sm ${activeContent === item.key ? "bg-teal-50 text-teal-700 font-bold" : "text-gray-500 hover:bg-gray-50"}`}
-              >
+              <div key={item.key} onClick={() => { setActiveContent(item.key); setIsSidebarOpen(false); }}
+                className={`flex items-center space-x-3 cursor-pointer px-4 py-2.5 rounded-xl text-sm ${activeContent === item.key ? "bg-teal-50 text-teal-700 font-bold" : "text-gray-500 hover:bg-gray-50"}`}>
                 <item.icon size={18} />
                 <span>{item.label}</span>
               </div>
@@ -498,36 +346,96 @@ export default function Admins({ user }) {
 
         {/* Main Content */}
         <main className="flex-1 p-6 md:p-10">
-          <header className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-800">{currentUser.name} Dashboard</h1>
-            <p className="text-gray-500 text-sm">Managing {currentUser.level}L Students | {currentUser.school}</p>
-          </header>
+          <header className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+  <div className="flex items-center gap-4">
+    {/* Encoded Name / Profile Initial (e.g., EO) */}
+    <div className="w-16 h-16 bg-slate-900 text-teal-400 rounded-[1.5rem] flex items-center justify-center text-xl font-black shadow-xl shadow-slate-200 shrink-0 border-4 border-white">
+      {getInitials(user.name)}
+    </div>
 
-          {/* VIEW STUDENTS TABLE */}
-          {activeContent === "manageStudents" && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center p-20 text-gray-400">
-                  <Loader2 className="animate-spin mb-2" size={32} />
-                  <p>Fetching class list...</p>
+    <div className="min-w-0">
+      <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter leading-none">
+        {user.name}
+      </h1>
+      <div className="flex flex-wrap items-center gap-2 mt-2">
+        <span className="bg-teal-500 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest">
+          {classMeta?.department}  {classMeta?.level} Level 
+        </span>
+        <span className="text-slate-400 text-[10px] font-bold uppercase tracking-tight truncate max-w-[200px]">
+          {classMeta?.school || "Loading Institution..."}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  {/* Class Summary Badge - Hidden on very small screens, visible on md+ */}
+  <div className="hidden md:flex items-center gap-3 bg-white p-2 pr-6 rounded-full border border-slate-100 shadow-sm">
+    <div className="w-10 h-10 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center">
+      <Users size={18} />
+    </div>
+    <div>
+      <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1 text-left">Management Scope</p>
+      <p className="text-xs font-bold text-slate-700 uppercase">
+        {classMeta?.department} • {classMeta?.level}L
+      </p>
+    </div>
+  </div>
+</header>
+
+{activeContent === "manageStudents" && (
+  <div className="space-y-3">
+    {students.map((s) => (
+      <div key={s.$id} className="bg-white p-4 rounded-[2rem] border border-slate-100 flex items-center gap-4 hover:shadow-lg transition-all">
+        {/* EO-style Profile Initial */}
+        <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-black text-sm border border-teal-100 shrink-0">
+          {getInitials(s.full_name)}
+        </div>
+        
+        <div className="flex-1 min-w-0">
+          <p className="font-black text-slate-800 text-sm uppercase truncate">{s.full_name}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-[10px] font-bold text-slate-400 uppercase">{s.matricNo}</p>
+            <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+            <p className="text-[10px] font-black text-teal-600 uppercase">{classMeta?.level}L</p>
+          </div>
+        </div>
+        
+        <div className="hidden md:block text-right">
+            <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Registry</p>
+            <p className="text-[10px] font-bold text-slate-600 uppercase">{classMeta?.department}</p>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+
+          {activeContent === "viewPayment" && (
+            <div className="space-y-8">
+              <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden">
+                <div className="px-6 py-4 bg-amber-50/50 border-b flex justify-between items-center">
+                  <h3 className="text-amber-700 font-black text-xs uppercase flex items-center gap-2"><Clock size={14} /> Pending ({receipts.length})</h3>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
-                      <tr>
-                        <th className="px-6 py-4">Student Name</th>
-                        <th className="px-6 py-4">Matric No</th>
-                        <th className="px-6 py-4">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {students.map((student) => (
-                        <tr key={student.$id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-800">{student.full_name || "Anonymous"}</td>
-                          <td className="px-6 py-4 text-gray-600">{student.matricNo || "N/A"}</td>
-                          <td className="px-6 py-4"><span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs">Active</span></td>
-                        </tr>
+                <div className="divide-y divide-gray-50">
+                  {receipts.map((rcpt) => (
+                    <div key={rcpt.$id} className="flex items-center gap-4 p-4">
+                      <input type="checkbox" onChange={() => handleStatusToggle(rcpt)} className="w-5 h-5 accent-teal-600 cursor-pointer" />
+                      <span className="flex-1 font-bold text-sm">{rcpt.name}</span>
+                      <button onClick={() => setSelectedImage(storage.getFileView(Config.bucketId, rcpt.fileId))} className="p-2 text-teal-600 bg-teal-50 rounded-lg"><Eye size={18} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {selectedStudents.length > 0 && (
+                <div className="bg-teal-900 rounded-[2.5rem] p-8 text-white">
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-2xl font-black">Verified Batch</h3>
+                    <button onClick={() => downloadVerifiedPDF()} className="px-6 py-3 bg-white text-teal-900 rounded-2xl font-black text-sm">DOWNLOAD REPORT</button>
+                  </div>
+                  <table className="w-full text-left text-sm">
+                    <tbody className="divide-y divide-teal-800/30">
+                      {selectedStudents.map(s => (
+                        <tr key={s.$id}><td className="py-4">{s.serialNumber}</td><td className="py-4 font-bold">{s.name}</td><td className="py-4">{s.matric}</td><td className="py-4 text-right"><span className="bg-teal-400/10 text-teal-400 px-3 py-1 rounded-full text-[10px]">VERIFIED</span></td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -536,279 +444,137 @@ export default function Admins({ user }) {
             </div>
           )}
 
-          {/* VIEW PAYMENT RECEIPTS */}
-          {activeContent === "viewPayment" && (
-            <div className="space-y-8 animate-in fade-in duration-500">
+{activeContent === "profile" && (
+  <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4">
+    <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl">
+      {/* Visual Identity Section */}
+      <div className="relative z-10 flex flex-col items-center">
+        <div className="w-24 h-24 bg-teal-500 rounded-[2.5rem] flex items-center justify-center text-3xl font-black mb-4 shadow-xl border-4 border-white/10">
+          {getInitials(user.name)}
+        </div>
+        <h2 className="text-3xl font-black tracking-tighter mb-1">{user.name}</h2>
+        <div className="flex items-center gap-2 mb-8">
+            <span className="text-teal-400 font-black text-[10px] uppercase tracking-widest">Administrator</span>
+            <span className="w-1 h-1 bg-white/20 rounded-full"></span>
+            <span className="text-white/40 font-black text-[10px] uppercase tracking-widest">{user.classCode}</span>
+        </div>
 
-              {/* PENDING TABLE */}
-              <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-4 bg-amber-50/50 border-b border-amber-100 flex justify-between items-center">
-                  <h3 className="text-amber-700 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                    <Clock size={14} /> Inbox: Awaiting Verification ({receipts.length})
-                  </h3>
-                </div>
-
-                <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
-                  {receipts.length > 0 ? receipts.map((rcpt) => (
-                    <div key={rcpt.$id} className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
-                      <input
-                        type="checkbox"
-                        onChange={() => handleStatusToggle(rcpt)}
-                        className="w-5 h-5 accent-teal-600 rounded-md cursor-pointer"
-                      />
-                      <div className="flex-1 grid grid-cols-12 gap-2 items-center">
-                        <span className="col-span-5 font-bold text-gray-800 text-sm uppercase">{rcpt.name}</span>
-                        <span className="col-span-4 text-gray-400 font-mono text-xs">{rcpt.matric}</span>
-                        <span className="col-span-3 text-[10px] font-black text-amber-600 italic">PENDING</span>
-                      </div>
-                      <button
-                        onClick={() => setSelectedImage(storage.getFileView(Config.bucketId, rcpt.fileId))}
-                        className="p-2 text-teal-600 bg-teal-50 rounded-lg hover:bg-teal-100 transition-all"
-                      >
-                        <Eye size={18} />
-                      </button>
-                    </div>
-                  )) : (
-                    <div className="p-10 text-center text-gray-400 text-sm italic">No pending receipts found.</div>
-                  )}
-                </div>
-              </div>
-
-              {/* VERIFIED SECTION & PDF DOWNLOAD */}
-              {selectedStudents.length > 0 && (
-                <div className="bg-teal-900 rounded-[2.5rem] p-8 text-white shadow-2xl">
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
-                    <div>
-                      <h3 className="text-2xl font-black">Verified Batch</h3>
-                      <p className="text-teal-300/60 text-xs">These students are now cleared in the database.</p>
-                    </div>
-
-                    <button
-                      onClick={() => downloadVerifiedPDF(selectedForReport.length > 0 ? selectedForReport : null)}
-                      className="flex items-center gap-2 px-6 py-3 bg-white text-teal-900 rounded-2xl font-black text-sm hover:scale-105 transition-transform shadow-lg"
-                    >
-                      <ExternalLink size={18} /> DOWNLOAD REPORT ({selectedForReport.length > 0 ? selectedForReport.length : 'ALL'})
-                    </button>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="text-[10px] uppercase text-teal-400/50 border-b border-teal-800">
-                        <tr>
-                          <th className="pb-4">Select</th>
-                          <th className="pb-4">S/N</th>
-                          <th className="pb-4">Name</th>
-                          <th className="pb-4">Matric</th>
-                          <th className="pb-4">Course Code</th>
-                          <th className="pb-4 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-teal-800/30">
-                        {selectedStudents.map(s => (
-                          <tr key={s.$id} className="group">
-                            <td className="py-4">
-                              <input
-                                type="checkbox"
-                                checked={selectedForReport.some(sel => sel.$id === s.$id)}
-                                onChange={() => toggleReportSelection(s)}
-                                className="w-4 h-4 accent-teal-400 rounded cursor-pointer"
-                              />
-                            </td>
-                            <td className="py-4 font-mono text-xs text-teal-400/70">{s.serialNumber}</td>
-                            <td className="py-4 font-bold uppercase group-hover:text-teal-300 transition-colors">{s.name}</td>
-                            <td className="py-4 font-mono text-xs text-teal-400/70">{s.matric}</td>
-                            <td className="py-4 font-mono text-xs text-teal-400/70">{s.code || "GST101"}</td>
-                            <td className="py-4 text-right">
-                              <span className="bg-teal-400/10 text-teal-400 px-3 py-1 rounded-full text-[10px] font-black">SYNCED</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ASSIGNMENTS SECTION */}
-          {activeContent === "submission" && (
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-6 py-4 bg-blue-50/50 border-b border-blue-100 flex justify-between items-center">
-                <h3 className="text-blue-700 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                  <BarChart size={14} /> Assignments Submitted ({assignments.length})
-                </h3>
-              </div>
-
-              {loading ? (
-                <div className="flex flex-col items-center justify-center p-20 text-gray-400">
-                  <Loader2 className="animate-spin mb-2" size={32} />
-                  <p>Fetching assignments...</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold border-b">
-                      <tr>
-                        <th className="px-6 py-4">Student Name</th>
-                        <th className="px-6 py-4">Matric</th>
-                        <th className="px-6 py-4">Course Code</th>
-                        <th className="px-6 py-4">Submission Date</th>
-                        <th className="px-6 py-4 text-right">View</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {assignments.length > 0 ? assignments.map((assignment) => (
-                        <tr key={assignment.$id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-800">{assignment.name}</td>
-                          <td className="px-6 py-4 text-gray-600 font-mono text-xs">{assignment.matric}</td>
-                          <td className="px-6 py-4 text-gray-600">{assignment.code || "N/A"}</td>
-                          <td className="px-6 py-4 text-gray-500 text-xs">{new Date(assignment.$createdAt).toLocaleDateString()}</td>
-                          <td className="px-6 py-4 text-right">
-                            {assignment.fileId && (
-                              <button
-                                onClick={() => setSelectedImage(storage.getFileView(Config.bucketId, assignment.fileId))}
-                                className="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all"
-                              >
-                                <Eye size={18} />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      )) : (
-                        <tr>
-                          <td colSpan="5" className="px-6 py-10 text-center text-gray-400 text-sm italic">No assignments submitted yet.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* PROFILE SECTION */}
-          {activeContent === "profile" && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="h-32 bg-gradient-to-r from-teal-600 to-teal-800" />
-                <div className="px-6 pb-8 -mt-12">
-                  <div className="flex flex-col md:flex-row items-start md:items-end gap-5 mb-8">
-                    <div className="w-24 h-24 bg-white p-1 rounded-2xl shadow-md">
-                      <div className="w-full h-full bg-teal-50 rounded-xl flex items-center justify-center text-teal-700">
-                        <UserCircle size={48} />
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <h2 className="text-2xl font-bold text-gray-800">{user.name}</h2>
-                      <p className="text-gray-500">{user.email}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ProfileField label="Institution" value={user.school} />
-                    <ProfileField label="Faculty" value={user.faculty} />
-                    <ProfileField label="Department" value={user.department} />
-                    <ProfileField label="Management Level" value={`${user.level} Level`} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+        {/* Data Grid: Sourced from classMeta */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+          <ProfileField 
+            label="Institution" 
+            value={classMeta?.school} 
+            icon={BookOpen} 
+          />
+          <ProfileField 
+            label="Faculty" 
+            value={classMeta?.faculty} 
+            icon={ShieldCheck} 
+          />
+          <ProfileField 
+            label="Department" 
+            value={classMeta?.department} 
+            icon={Users} 
+          />
+          <ProfileField 
+            label="Level" 
+            value={`${classMeta?.level}L`} 
+            icon={BarChart} 
+          />
+        </div>
+      </div>
+      
+      {/* Background Glow */}
+      <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl"></div>
+    </div>
+  </div>
+)}
         </main>
       </div>
 
-      {/* --- IMAGE LIGHTBOX POPUP --- */}
+      {/* Image Popup */}
       {selectedImage && (
-        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 md:p-10">
-          <button
-            onClick={() => setSelectedImage(null)}
-            className="absolute top-10 right-10 text-white hover:text-teal-400 transition-colors"
-          >
-            <X size={40} />
-          </button>
-
-          <img
-            src={selectedImage}
-            alt="Receipt"
-            className="max-w-full max-h-full rounded-lg shadow-2xl animate-in zoom-in-95 duration-300"
-          />
-
-          <div className="absolute bottom-10 flex gap-4">
-            <a
-              href={selectedImage}
-              target="_blank"
-              className="px-6 py-3 bg-white rounded-full font-bold flex items-center gap-2 hover:bg-teal-50"
-            >
-              <ExternalLink size={20} /> Open in New Tab
-            </a>
-          </div>
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center">
+          <button onClick={() => setSelectedImage(null)} className="absolute top-10 right-10 text-white"><X size={40} /></button>
+          <img src={selectedImage} alt="Receipt" className="max-w-[90%] max-h-[90%] rounded-lg" />
         </div>
       )}
 
-      {/* --- PROMOTION POPUP --- */}
-      {showPromotionPopup && (
-        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 md:p-10">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle size={32} className="text-teal-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Congratulations!</h2>
-              <p className="text-gray-600">You have been promoted to an Admin.</p>
-            </div>
+      {/* Promotion Popup */}
+{showPromotionPopup && (
+<div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4">
+<div className="bg-white rounded-3xl p-8 max-w-md w-full">
+  <h2 className="text-2xl font-bold text-center mb-6">
+    Setup Payout Account
+  </h2>
 
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
-                <input
-                  type="text"
-                  value={accountDetails.name}
-                  onChange={(e) => setAccountDetails({ ...accountDetails, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  placeholder="Enter your account name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
-                <input
-                  type="text"
-                  value={accountDetails.bank}
-                  onChange={(e) => setAccountDetails({ ...accountDetails, bank: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  placeholder="Enter your bank name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
-                <input
-                  type="text"
-                  value={accountDetails.accountNumber}
-                  onChange={(e) => setAccountDetails({ ...accountDetails, accountNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  placeholder="Enter your account number"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">BVN</label>
-                <input
-                  type="text"
-                  value={accountDetails.bvn}
-                  onChange={(e) => setAccountDetails({ ...accountDetails, bvn: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  placeholder="Enter your BVN"
-                />
-              </div>
-            </div>
+  <div className="space-y-4">
 
-            <button
-              onClick={handleAccountDetailsSubmit}
-              className="w-full bg-teal-600 text-white py-3 rounded-lg font-semibold hover:bg-teal-700 transition-colors"
-            >
-              Save Account Details
-            </button>
-          </div>
-        </div>
-      )}
+    {/* Business Name */}
+    <input
+      type="text"
+      placeholder="Account / Business Name"
+      value={accountDetails.name}
+      onChange={(e) =>
+        setAccountDetails({ ...accountDetails, name: e.target.value })
+      }
+      className="w-full p-3 border rounded-lg"
+    />
+
+    {/* Bank Dropdown (IMPORTANT: Use bank codes) */}
+    <select
+      value={accountDetails.bankCode}
+      onChange={(e) =>
+        setAccountDetails({ ...accountDetails, bankCode: e.target.value })
+      }
+      className="w-full p-3 border rounded-lg"
+    >
+      <option value="">Select Bank</option>
+      <option value="044">Access Bank</option>
+      <option value="058">GTBank</option>
+      <option value="011">First Bank</option>
+      <option value="033">UBA</option>
+      <option value="057">Zenith Bank</option>
+    </select>
+
+    {/* Account Number */}
+    <input
+      type="text"
+      placeholder="Account Number"
+      value={accountDetails.accountNumber}
+      onChange={(e) =>
+        setAccountDetails({
+          ...accountDetails,
+          accountNumber: e.target.value.replace(/\D/g, "")
+        })
+      }
+      maxLength={10}
+      className="w-full p-3 border rounded-lg"
+    />
+
+    {/* Optional Email */}
+    <input
+      type="email"
+      placeholder="Business Email (optional)"
+      value={accountDetails.email}
+      onChange={(e) =>
+        setAccountDetails({ ...accountDetails, email: e.target.value })
+      }
+      className="w-full p-3 border rounded-lg"
+    />
+
+    {/* Button */}
+    <button
+      onClick={handleAccountDetailsSubmit}
+      disabled={loading}
+      className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold"
+    >
+      {loading ? "Processing..." : "Save Details"}
+    </button>
+  </div>
+</div>
+</div>
+)}
     </>
   );
 }
