@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Header from "./header";
-import { databases, storage, Config } from "../backend/appwrite";
+import { databases, storage, functions, Config } from "../backend/appwrite";
 import { Query } from "appwrite";
 import {
   Menu, X, Users, BookOpen, BarChart, Loader2, ShieldCheck,
@@ -15,21 +15,102 @@ export default function Admins({ user }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [students, setStudents] = useState([]);
   const [receipts, setReceipts] = useState([]); 
+  const [assignCourse, setAssignCourse] = useState(null);
+  const [adminInfo, setAdminInfo] = useState(null);
   const [assignments, setAssignments] = useState([]); 
   const [selectedImage, setSelectedImage] = useState(null); 
-  const [showPromotionPopup, setShowPromotionPopup] = useState(false);
-  const [accountDetails, setAccountDetails] = useState({
-    name: "",
-    bankCode: "",
-    accountNumber: "",
-    email: ""
-  });
+  // const [showPromotionPopup, setShowPromotionPopup] = useState(false);
+
 
 const [loading, setLoading] = useState(false);
 const [classMeta, setClassMeta] = useState(null);
 
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [selectedForReport, setSelectedForReport] = useState([]);
+
+  // Initial state — put this in your useState
+const [accountDetails, setAccountDetails] = useState({
+  businessName: "",
+  businessContact: "",
+  businessEmail: "",
+  businessMobile: "",
+  businessContactMobile: "",
+  bankCode: "",
+  accountNumber: "",
+  manualFee: "",
+
+});
+
+// Validation helper
+const validateAccountDetails = () => {
+  const {
+    businessName, businessContact, businessEmail,
+    businessMobile, businessContactMobile,
+    bankCode, accountNumber, manualFee
+  } = accountDetails;
+
+  
+  if (!businessName.trim()) return "Business name is required";
+  if (!businessContact.trim()) return "Contact person name is required";
+  if (!businessEmail.trim() || !/\S+@\S+\.\S+/.test(businessEmail)) return "Valid business email is required";
+  if (!businessMobile || businessMobile.length < 10) return "Valid business mobile is required";
+  if (!businessContactMobile || businessContactMobile.length < 10) return "Valid contact mobile is required";
+  if (!bankCode) return "Please select a bank";
+ if (!accountNumber || accountNumber.length !== 10) return "Account number must be 10 digits";
+if (!manualFee || isNaN(manualFee) || Number(manualFee) <= 0) return "Valid payout fee amount is required";
+return null;
+};
+
+// Submit handler
+const handleAccountDetailsSubmit = async () => {
+  const validationError = validateAccountDetails();
+  if (validationError) {
+    alert(validationError); // replace with your toast/snackbar
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const payload = {
+      account_bank: accountDetails.bankCode,
+      account_number: accountDetails.accountNumber,
+      business_name: accountDetails.businessName,
+      business_email: accountDetails.businessEmail,
+      business_contact: accountDetails.businessContact,
+      business_contact_mobile: accountDetails.businessContactMobile,
+      business_mobile: accountDetails.businessMobile,
+      country: "NG",
+      manual_fee: Number(accountDetails.manualFee), 
+      userId: user.$id, // your logged-in user's ID
+    };
+
+    const execution = await functions.createExecution(
+      "69caa0e800257591f0b4",   // replace with your function ID
+      JSON.stringify(payload),        // body — stringified JSON
+      false,                          // async = false (wait for result)
+      "/",                            // path
+      "POST",                         // method
+      { "Content-Type": "application/json" }
+    );
+
+  let result = JSON.parse(execution.responseBody);
+
+   if (result && result.success) {
+  Swal.fire('Success', `Account verified! Name: ${result.account_name}`, 'success');
+  // setShowPromotionPopup(false);
+  // Ideally, refresh user data here so the popup doesn't come back
+} else {
+  const errorMsg = result?.message || "Failed to create subaccount.";
+  Swal.fire('Error', errorMsg, 'error');
+}
+  } catch (err) {
+    console.error("Subaccount creation error:", err);
+    alert("Something went wrong. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const toggleReportSelection = (student) => {
     setSelectedForReport(prev =>
@@ -140,129 +221,45 @@ const [classMeta, setClassMeta] = useState(null);
     }
   };
 
-const handleAccountDetailsSubmit = async () => {
 
-  // 🔒 VALIDATION WITH SWAL
-  if (!accountDetails.name.trim()) {
-    return Swal.fire({
-      icon: "warning",
-      title: "Missing Field",
-      text: "Account name is required"
-    });
-  }
-
-  if (!accountDetails.bankCode) {
-    return Swal.fire({
-      icon: "warning",
-      title: "Missing Field",
-      text: "Please select a bank"
-    });
-  }
-
-  if (accountDetails.accountNumber.length !== 10) {
-    return Swal.fire({
-      icon: "warning",
-      title: "Invalid Account Number",
-      text: "Account number must be 10 digits"
-    });
-  }
-
-  // 🔍 CONFIRMATION STEP (PRO UX)
-  const confirm = await Swal.fire({
-    title: "Confirm Account Details",
-    html: `
-      <p><strong>Name:</strong> ${accountDetails.name}</p>
-      <p><strong>Account Number:</strong> ${accountDetails.accountNumber}</p>
-    `,
-    icon: "question",
-    showCancelButton: true,
-    confirmButtonText: "Proceed",
-    cancelButtonText: "Edit"
-  });
-
-  if (!confirm.isConfirmed) return;
-
-  setLoading(true);
-
-  // 🔄 LOADING STATE
-  Swal.fire({
-    title: "Processing...",
-    text: "Creating your payout account",
-    allowOutsideClick: false,
-    didOpen: () => {
-      Swal.showLoading();
-    }
-  });
-
-  try {
-    const payload = {
-      business_name: accountDetails.name,
-      account_bank: accountDetails.bankCode,
-      account_number: accountDetails.accountNumber,
-      business_email: accountDetails.email || "default@email.com",
-      business_contact: accountDetails.name,
-      business_contact_mobile: user?.phone || "08000000000"
-    };
-
-    const response = await functions.createExecution(
-      "69caa0e800257591f0b4",
-      JSON.stringify(payload)
-    );
-
-    const result = JSON.parse(response.response);
-
-    // ❌ ERROR FROM BACKEND
-    if (!result.success) {
-      return Swal.fire({
-        icon: "error",
-        title: "Failed",
-        text: result.message || "Unable to create subaccount"
-      });
-    }
-
-    // ✅ SUCCESS
-    await Swal.fire({
-      icon: "success",
-      title: "Account Setup Successful 🎉",
-      text: "Your payout account has been created successfully"
-    });
-
-    console.log("Subaccount:", result);
-
-    // 🔐 CLOSE POPUP
-    setShowPromotionPopup(false);
-
-    // 🧠 OPTIONAL: Save locally
-    // setUserSubaccount(result.subaccount_id);
-
-  } catch (error) {
-    console.error(error);
-
-    Swal.fire({
-      icon: "error",
-      title: "Network Error",
-      text: "Something went wrong. Please try again."
-    });
-
-  } finally {
-    setLoading(false);
-  }
-};
-
+// Runs ONCE on mount — for data that doesn't change per tab
 useEffect(() => {
-  const fetchData = async () => {
+  const fetchStaticData = async () => {
+    if (!user?.classCode) return;
+    try {
+      const code = user.classCode;
+
+      const classRes = await databases.listDocuments(Config.dbId, Config.classDataCol, [
+        Query.equal("schoolId", code)
+      ]);
+      if (classRes.documents.length > 0) setClassMeta(classRes.documents[0]);
+
+      const assignRes = await databases.listDocuments(Config.dbId, Config.coursesCol, [
+        Query.equal("assignedRepId", user.$id)
+      ]);
+      if (assignRes.documents.length > 0) setAssignCourse(assignRes.documents[0]);
+
+      const adminInfoRes = await databases.listDocuments(Config.dbId, Config.adminCol, [
+        Query.equal("studentId", user.$id)
+      ]);
+      if (adminInfoRes.documents.length > 0) setAdminInfo(adminInfoRes.documents[0]);
+
+    } catch (error) {
+      console.error("Static Fetch Error:", error);
+    }
+  };
+  fetchStaticData();
+}, [user]); // 👈 only re-runs if user changes
+
+
+// Runs when tab changes — only tab-specific data
+useEffect(() => {
+  const fetchTabData = async () => {
     if (!user?.classCode) return;
     setLoading(true);
     try {
       const code = user.classCode;
 
-      // 1. Fetch Class Metadata (School, Dept, Level, Faculty)
-      const classRes = await databases.listDocuments(Config.dbId, Config.classDataCol, [
-        Query.equal("schoolId", code) // Assuming schoolId stores the classCode
-      ]);
-      if (classRes.documents.length > 0) setClassMeta(classRes.documents[0]);
-
-      // 2. Fetch Content based on active tab
       if (activeContent === "manageStudents") {
         const res = await databases.listDocuments(Config.dbId, Config.profilesCol, [
           Query.equal("classCode", code),
@@ -270,22 +267,20 @@ useEffect(() => {
         ]);
         setStudents(res.documents);
       }
-      // ... fetch payments/assignments using Query.equal("classCode", code)
+
     } catch (error) {
-      console.error("Registry Fetch Error:", error);
+      console.error("Tab Fetch Error:", error);
     } finally {
       setLoading(false);
     }
   };
-  fetchData();
-}, [activeContent, user]);
-
-
-  useEffect(() => {
-    if (user?.role === 'admin' && !user?.accountNumber) {
-      setShowPromotionPopup(true);
-    }
-  }, [user]);
+  fetchTabData();
+}, [activeContent, user]); // 👈 re-runs on tab switch
+  // useEffect(() => {
+  //   if (user?.role === 'admin' && !user?.accountNumber) {
+  //     setShowPromotionPopup(true);
+  //   }
+  // }, [user]);
 
 // Helper: Transforms "Emmanuel Ojetayo" into "EO"
 const getInitials = (name) => {
@@ -378,6 +373,11 @@ function ProfileField({ label, value, icon: Icon }) {
       <p className="text-xs font-bold text-slate-700 uppercase">
         {classMeta?.department} • {classMeta?.level}L
       </p>
+      {/* AssignedCourse using .coursetitle and .coursetitle*/}
+       {adminInfo && !adminInfo?.account_number &&  ( <span className="bg-teal-700 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+          {adminInfo?.coursetitle}
+        </span>
+       )}
     </div>
   </div>
 </header>
@@ -501,79 +501,115 @@ function ProfileField({ label, value, icon: Icon }) {
       )}
 
       {/* Promotion Popup */}
-{showPromotionPopup && (
-<div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4">
-<div className="bg-white rounded-3xl p-8 max-w-md w-full">
-  <h2 className="text-2xl font-bold text-center mb-6">
-    Setup Payout Account
-  </h2>
+{adminInfo && !adminInfo?.account_number &&  (
+  <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4">
+    <div className="bg-white rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <h2 className="text-2xl font-bold text-center mb-6">
+        Setup Payout Account
+      </h2>
 
-  <div className="space-y-4">
+      <div className="space-y-4">
 
-    {/* Business Name */}
-    <input
-      type="text"
-      placeholder="Account / Business Name"
-      value={accountDetails.name}
-      onChange={(e) =>
-        setAccountDetails({ ...accountDetails, name: e.target.value })
-      }
-      className="w-full p-3 border rounded-lg"
-    />
+        {/* Business Name */}
+        <input
+          type="text"
+          placeholder="Business Name *"
+          value={accountDetails.businessName}
+          onChange={(e) => setAccountDetails({ ...accountDetails, businessName: e.target.value })}
+          className="w-full p-3 border rounded-lg"
+        />
 
-    {/* Bank Dropdown (IMPORTANT: Use bank codes) */}
-    <select
-      value={accountDetails.bankCode}
-      onChange={(e) =>
-        setAccountDetails({ ...accountDetails, bankCode: e.target.value })
-      }
-      className="w-full p-3 border rounded-lg"
-    >
-      <option value="">Select Bank</option>
-      <option value="044">Access Bank</option>
-      <option value="058">GTBank</option>
-      <option value="011">First Bank</option>
-      <option value="033">UBA</option>
-      <option value="057">Zenith Bank</option>
-    </select>
+        {/* Business Contact Person */}
+        <input
+          type="text"
+          placeholder="Contact Person Full Name *"
+          value={accountDetails.businessContact}
+          onChange={(e) => setAccountDetails({ ...accountDetails, businessContact: e.target.value })}
+          className="w-full p-3 border rounded-lg"
+        />
 
-    {/* Account Number */}
-    <input
-      type="text"
-      placeholder="Account Number"
-      value={accountDetails.accountNumber}
-      onChange={(e) =>
-        setAccountDetails({
-          ...accountDetails,
-          accountNumber: e.target.value.replace(/\D/g, "")
-        })
-      }
-      maxLength={10}
-      className="w-full p-3 border rounded-lg"
-    />
+        {/* Business Email */}
+        <input
+          type="email"
+          placeholder="Business Email *"
+          value={accountDetails.businessEmail}
+          onChange={(e) => setAccountDetails({ ...accountDetails, businessEmail: e.target.value })}
+          className="w-full p-3 border rounded-lg"
+        />
 
-    {/* Optional Email */}
-    <input
-      type="email"
-      placeholder="Business Email (optional)"
-      value={accountDetails.email}
-      onChange={(e) =>
-        setAccountDetails({ ...accountDetails, email: e.target.value })
-      }
-      className="w-full p-3 border rounded-lg"
-    />
+        {/* Business Mobile (registered business line) */}
+        <input
+          type="tel"
+          placeholder="Business Phone Number * (e.g. 09087930450)"
+          value={accountDetails.businessMobile}
+          onChange={(e) =>
+            setAccountDetails({ ...accountDetails, businessMobile: e.target.value.replace(/\D/g, "") })
+          }
+          maxLength={11}
+          className="w-full p-3 border rounded-lg"
+        />
 
-    {/* Button */}
-    <button
-      onClick={handleAccountDetailsSubmit}
-      disabled={loading}
-      className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold"
-    >
-      {loading ? "Processing..." : "Save Details"}
-    </button>
+        {/* Contact Person Mobile */}
+        <input
+          type="tel"
+          placeholder="Contact Person Mobile * (e.g. 09089038200)"
+          value={accountDetails.businessContactMobile}
+          onChange={(e) =>
+            setAccountDetails({ ...accountDetails, businessContactMobile: e.target.value.replace(/\D/g, "") })
+          }
+          maxLength={11}
+          className="w-full p-3 border rounded-lg"
+        />
+
+        {/* Bank Dropdown */}
+        <select
+          value={accountDetails.bankCode}
+          onChange={(e) => setAccountDetails({ ...accountDetails, bankCode: e.target.value })}
+          className="w-full p-3 border rounded-lg"
+        >
+          <option value="">Select Bank *</option>
+          <option value="044">Access Bank</option>
+          <option value="058">GTBank</option>
+          <option value="011">First Bank</option>
+          <option value="033">UBA</option>
+          <option value="057">Zenith Bank</option>
+          <option value="232">Sterling Bank</option>
+          <option value="035">Wema Bank</option>
+          <option value="070">Fidelity Bank</option>
+        </select>
+
+        {/* Account Number */}
+        <input
+          type="text"
+          placeholder="Account Number * (10 digits)"
+          value={accountDetails.accountNumber}
+          onChange={(e) =>
+            setAccountDetails({ ...accountDetails, accountNumber: e.target.value.replace(/\D/g, "") })
+          }
+          maxLength={10}
+          className="w-full p-3 border rounded-lg"
+        />
+
+        <input
+          type="number"
+          placeholder="Payout Fee Amount (e.g. 4000) *"
+          value={accountDetails.manualFee}
+          onChange={(e) => setAccountDetails({ ...accountDetails, manualFee: e.target.value })}
+          className="w-full p-3 border rounded-lg"
+        />
+
+ 
+        {/* Submit */}
+        <button
+          onClick={handleAccountDetailsSubmit}
+          disabled={loading}
+          className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold"
+        >
+          {loading ? "Processing..." : "Save Details"}
+        </button>
+      </div>
+    </div>
   </div>
-</div>
-</div>
 )}
     </>
   );

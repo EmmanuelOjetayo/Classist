@@ -101,10 +101,6 @@ export default function SuperAdmins() {
       coursecode: data.code.toUpperCase(),
       coursetitle: data.title,
       courseunit: parseInt(data.unit),
-      faculty: classData.faculty,
-      school: classData.school,
-      department: classData.dept,
-      level: classData.level,
       classCode: classData.code
     };
 
@@ -202,7 +198,7 @@ const assignCourseRep = async (course, student) => {
 
     // Update Course with AdminDoc ID (NOT studentId) so we can delete the admin record easily later
     await databases.updateDocument(Config.dbId, Config.coursesCol, course.$id, {
-      assignedRepId: adminDoc.$id 
+      assignedRepId: adminDoc.studentId 
     });
 
     // Elevate Role
@@ -225,6 +221,9 @@ const unassignCourseRep = async (courseId, adminId, studentProfileId) => {
     // B. Clear assignedRepId in coursesCol
     await databases.updateDocument(Config.dbId, Config.coursesCol, courseId, {
       assignedRepId: null 
+    });
+    await databases.updateDocument(Config.dbId, Config.profilesCol, student.$id, {
+      role: 'student'
     });
   // Change this line in your unassignCourseRep function:
 await databases.updateDocument(Config.dbId, Config.profilesCol, studentProfileId, { role: 'student' });
